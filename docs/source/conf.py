@@ -2,8 +2,6 @@ import pathlib
 import sys
 from datetime import datetime
 
-import caproto
-import caproto.docs
 import sphinx_rtd_theme  # noqa: F401
 
 module_path = pathlib.Path(__file__).resolve().parents[2]
@@ -36,13 +34,8 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
-    'numpydoc',
-    'doctr_versions_menu',
     'sphinx_rtd_theme',
 ]
-
-# Add any paths that contain templates here, relative to this directory.
-templates_path = [caproto.docs.templates.PATH]
 
 # The suffix(es) of source filenames.
 source_suffix = '.rst'
@@ -87,15 +80,12 @@ todo_include_todos = True
 
 # -- Extension configuration -------------------------------------------------
 
-autodoc_default_options = {
-    **caproto.docs.autodoc_default_options,
-}
+autodoc_default_options = {}
 
 intersphinx_mapping = {
     # 'ophyd': ('https://blueskyproject.io/ophyd', None),
     'python': ('https://docs.python.org/3', None),
     # 'numpy': ('https://docs.scipy.org/doc/numpy', None),
-    'caproto': ('https://caproto.github.io/caproto/master', None),
 }
 
 # Generate summaries:
@@ -108,7 +98,6 @@ autoclass_content = 'init'
 numpydoc_show_class_members = False
 
 autosummary_context = {
-    **caproto.docs.autosummary_context,
     # The default assumes your repository root is one level up from conf.py.
     # If that is not accurate, uncomment and modify the following line:
     # 'project_root': '..',
@@ -122,5 +111,3 @@ html_context = {
 }
 
 
-def setup(app):
-    caproto.docs.setup(app)

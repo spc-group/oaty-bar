@@ -1,6 +1,6 @@
 [project]
-name = "Oaty Bar"
-version = "0.0.0"
+name = "oaty-bar"
+version = "0.1.0"
 authors = [
   { name="Mark Wolfman", email="" },
 ]

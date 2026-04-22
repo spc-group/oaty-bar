@@ -1,10 +1,61 @@
 [workspace]
-authors = ["Mark Wolfman <canismarko@gmail.com>"]
+authors = ["Mark Wolfman <wolfman@anl.gov>"]
 channels = ["conda-forge"]
 name = "oaty-bar"
 platforms = ["linux-64"]
-version = "0.1.0"
 
 [tasks]
 
 [dependencies]
+python = ">=3.14.4,<3.15"
+
+[pypi-dependencies]
+oaty-bar = { path = ".", editable = true }
+tiled = { version = ">=0.2.9, <0.3", extras = ["client"] }
+
+[environments]
+dev = { features = ["dev"] }
+
+[feature.dev.pypi-dependencies]
+ruff = ">=0.15.11, <0.16"
+pytest = "*"
+black = ">=26.3.1, <27"
+isort = ">=8.0.1, <9"
+mypy = ">=1.20.2, <2"
+sphinx = ">=9.1.0, <10"
+sphinx-rtd-theme = ">=3.1.0, <4"
+
+[feature.dev.tasks]
+test-all = [
+    {task = "lint" },
+    {task = "format", args = ["--check"] },
+    {task = "sort-imports", args = ["--check"] },
+    {task = "check-types" },
+    {task = "tests" },
+]
+lint-all = [
+    {task = "lint", args = ["--fix"]},
+    {task = "format"},
+    {task = "sort-imports"},
+]
+check-types = "mypy"
+make-docs = "make html --directory=docs/"
+tests = "pytest -Werror"
+
+[feature.dev.tasks.lint]
+args = [
+     { arg = "fix", default = "" },
+]
+cmd = "ruff check {{ fix }}"
+
+[feature.dev.tasks.sort-imports]
+args = [
+     { arg = "check_flag", default = "" },
+]
+cmd = "isort src/ tests/ {{ check_flag }}"
+
+[feature.dev.tasks.format]
+args = [
+     { arg = "check_flag", default = "" },
+]
+cmd = "black src/ tests/ {{ check_flag }}"
