@@ -9,7 +9,8 @@ import pytest
 import pytest_asyncio
 from nexusformat.nexus import NXFile
 
-from oaty_bar.hdf import (
+from oaty_bar._export_hdf import (
+    main,
     nxexternallink,
     serialize_hdf,
     write_stream,
@@ -143,9 +144,9 @@ root:NXroot
 """
 
 
-@pytest.fixture()
-def xafs_run(tmpdir):
-    with build_tree(str(tmpdir)) as run:
+@pytest.fixture(scope="package")
+def xafs_run():
+    with build_tree() as run:
         yield run
 
 
@@ -249,3 +250,25 @@ def test_nxexternallink_targets():
         linkB = fd.get("externB", getlink=True)
     assert linkA.path == "/entry/data"
     assert linkB.path == "/entry/data"
+
+
+def test_export_hdf(tmp_path, xafs_run, mocker):
+    from_profile = mocker.MagicMock(
+        return_value={
+            "123-45-67890": xafs_run,
+        }
+    )
+    mocker.patch("oaty_bar._export_hdf.from_profile", new=from_profile)
+    main(
+        [
+            "123-45-67890",
+            str(tmp_path),
+            "--raw-profile",
+            "raw_catalog",
+            "--processed-profile",
+            "proc_catalog",
+        ]
+    )
+    # Check that the file was created
+    target_file = tmp_path / "202210060914-NMC-811-Pristine-rel_scan-7d1daf1d.h5"
+    assert target_file.exists()

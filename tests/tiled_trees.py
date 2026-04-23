@@ -320,30 +320,7 @@ xafs_tree = MapAdapter(
 
 
 @contextmanager
-def build_tree(writable_storage):
-    # tree = in_memory(writable_storage=writable_storage)
+def build_tree():
     with Context.from_app(build_app(xafs_tree)) as context:
         client = from_context(context)
         yield client
-        # Write sample data
-        # primary_metadata = {
-        #     "hints": hints,
-        #     "data_keys": data_keys,
-        #     "configuration": xafs_config,
-        # }
-        # primary = await client.create_container("primary", metadata=primary_metadata)
-        # internal = primary.write_table(xafs_events, key="internal")
-        # # Fluorescence data
-        # primary.write_array(
-        #     np.full(shape=(100, 8, 4096), fill_value=2), key="ge_8element"
-        # )
-        # primary.write_array(np.ones(shape=(100,)), key="ge_8element-element0-all_event")
-        # baseline = client.create_container(
-        #     "baseline",
-        #     metadata={
-        #         "hints": {"aps_current": {"fields": ["aps_current"]}},
-        #         "data_keys": baseline_data_keys,
-        #     },
-        # )
-        # internal = baseline.write_table(xafs_baseline, key="internal")
-        # yield tree

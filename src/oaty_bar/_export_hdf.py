@@ -1,12 +1,15 @@
+import argparse
 import datetime as dt
 import json
 import logging
-from collections.abc import Sequence
+import re
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import IO, Any
 
 import h5py
 import numpy as np
+from tiled.client import from_profile
 from tiled.client.container import Container
 from tiled.utils import SerializationError
 
@@ -271,4 +274,62 @@ def serialize_hdf(buff: IO[bytes], run: Container):
     with h5py.File(buff, mode="w") as nxfile:
         # Write data entry to the nexus file
         write_run(nxfile=nxfile, run=run)
-    # return buff.getbuffer()
+
+
+def build_file_name(metadata: Mapping[str, Any]) -> str:
+    """Build the name of the target HDF5 file based on metadata."""
+    start_doc = metadata.get("start", {})
+    start_time = dt.datetime.fromtimestamp(start_doc.get("time", 0))
+    sample_name = start_doc.get("sample_name")
+    scan_name = start_doc.get("scan_name")
+    plan_name = start_doc.get("plan_name")
+    uid_base = start_doc.get("uid", "").split("-")[0]
+    bits = [
+        start_time.strftime("%Y%m%d%H%M"),
+        sample_name,
+        scan_name,
+        plan_name,
+        uid_base,
+    ]
+    bits = [bit for bit in bits if bit not in ["", None]]
+    base_name = "-".join(bits)
+    base_name = re.sub(r"[ ]", "_", base_name)
+    base_name = re.sub(r"[/]", "", base_name)
+    return f"{base_name}.h5"
+
+
+def export_hdf(uid: str, target_dir: Path, *, raw_profile: str, processed_profile: str):
+    raw_catalog = from_profile(raw_profile)
+    run = raw_catalog[uid]
+    target_file = target_dir / build_file_name(run.metadata)
+    with open(target_file, mode="ab+") as fd:
+        print(fd)
+        serialize_hdf(buff=fd, run=run)
+
+
+def main(args: Sequence[str] | None = None):
+    """Main entry-point for exporting an HDF5 file for a given run."""
+    # Argument handling
+    parser = argparse.ArgumentParser(
+        prog="export-hdf",
+        description="Export an HDF5 file for a given run",
+    )
+    parser.add_argument("uid", help="The UID of the bluesky run to export.")
+    parser.add_argument(
+        "target_dir", help="The DM directory to receive the exported file."
+    )
+    parser.add_argument(
+        "--raw-profile", help="The name of the Tiled profile used for raw runs."
+    )
+    parser.add_argument(
+        "--processed-profile",
+        help="The name of the Tiled profile used for processed run data.",
+    )
+    parsed = parser.parse_args(args)
+    # Do the actual exporting
+    export_hdf(
+        uid=parsed.uid,
+        target_dir=Path(parsed.target_dir),
+        raw_profile=parsed.raw_profile,
+        processed_profile=parsed.processed_profile,
+    )
