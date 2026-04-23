@@ -13,6 +13,7 @@ python = ">=3.14.4,<3.15"
 oaty-bar = { path = ".", editable = true }
 tiled = { version = ">=0.2.9, <0.3", extras = ["client"] }
 h5py = ">=3.16.0, <4"
+hdf5plugin = ">=6.0.0, <7"
 
 [environments]
 dev = { features = ["dev"] }

@@ -288,31 +288,25 @@ hints = {
 
 xafs_tree = MapAdapter(
     {
-        "streams": MapAdapter(
+        "primary": MapAdapter(
             {
-                "primary": MapAdapter(
-                    {
-                        "internal": TableAdapter.from_pandas(xafs_events),
-                        "ge_8element": ArrayAdapter.from_array(
-                            np.ones(shape=(100, 8, 1024))
-                        ),
-                        "ge_8element-element0-all_event": ArrayAdapter.from_array(
-                            np.ones(shape=(100,))
-                        ),
-                    },
-                    metadata={
-                        "hints": hints,
-                        "data_keys": data_keys,
-                        "configuration": xafs_config,
-                    },
+                "internal": TableAdapter.from_pandas(xafs_events),
+                "ge_8element": ArrayAdapter.from_array(np.ones(shape=(100, 8, 1024))),
+                "ge_8element-element0-all_event": ArrayAdapter.from_array(
+                    np.ones(shape=(100,))
                 ),
-                "baseline": MapAdapter(
-                    xafs_baseline,
-                    metadata={
-                        "data_keys": baseline_data_keys,
-                    },
-                ),
-            }
+            },
+            metadata={
+                "hints": hints,
+                "data_keys": data_keys,
+                "configuration": xafs_config,
+            },
+        ),
+        "baseline": MapAdapter(
+            xafs_baseline,
+            metadata={
+                "data_keys": baseline_data_keys,
+            },
         ),
     },
     metadata=xafs_run_metadata,

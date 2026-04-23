@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from collections.abc import Mapping, Sequence
+from io import BytesIO
 from pathlib import Path
 from typing import IO, Any
 
@@ -11,9 +12,10 @@ import h5py
 import numpy as np
 from tiled.client import from_profile
 from tiled.client.container import Container
+from tiled.server.schemas import DataSource
 from tiled.utils import SerializationError
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("oaty-bar")
 
 
 def nxgroup(parent: h5py.Group, name: str, nx_class: str | None = None) -> h5py.Group:
@@ -79,7 +81,6 @@ def nxexternallink(
 def write_run(
     nxfile: h5py.File,
     run: Container,
-    streams_prefix: str = "streams",
 ):
     """Write a run to the HDF file as a nexus-compatiable entry.
 
@@ -93,10 +94,14 @@ def write_run(
     nxdata(entry, "data")
     instrument = nxinstrument(entry, "instrument")
     bluesky = nxnote(instrument, "bluesky")
-    nxnote(bluesky, "streams")
-    # Write stream data
     write_metadata(run.metadata, entry=entry)
-    streams = (run[streams_prefix]) if streams_prefix else run
+    # Write stream data
+    nxnote(bluesky, "streams")
+    if "streams" in run.keys():
+        # Older Tiled versions use an additional "streams" branch in the tree
+        streams = run["streams"]
+    else:
+        streams = run
     for stream_name, stream_node in streams.items():
         write_stream(
             name=stream_name,
@@ -168,6 +173,42 @@ def write_metadata(metadata: dict[str, Any], entry: h5py.Group):
         )
 
 
+def insert_data_source(parent: h5py.Group, source: DataSource):
+    """Insert data into the HDF group by reading from another HDF5
+    file.
+
+    """
+    # Create an empty array to hold the copied sources
+    dtype_kind = source.structure["data_type"]["kind"]
+    dtype_size = source.structure["data_type"]["itemsize"]
+    dtype = f"{dtype_kind}{dtype_size}"
+    if "value" in parent.keys():
+        del parent["value"]
+    ds = parent.create_dataset(
+        "value",
+        shape=source.structure["shape"],
+        dtype=dtype,
+        compression="szip",
+    )
+    # Open and copy data from source files
+    source_path = source.parameters["dataset"]
+    assets = sorted(source.assets, key=lambda asset: asset.num)
+    start = 0
+    for asset in assets:
+        uri = asset.data_uri
+        if not uri.startswith("file://localhost"):
+            raise ValueError(f"Cannot process data source uri: {uri}")
+        source_file = uri.removeprefix("file://localhost")
+        with h5py.File(source_file, mode="r") as src_fd:
+            src_ds = src_fd[source_path]
+            stop = start + src_ds.shape[0]
+            try:
+                ds[start:stop] = src_ds
+            except Exception as exc:
+                breakpoint()
+        start = stop
+
+
 def write_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
     """Write a stream to the HDF file as a nexus-compatiable entry.
 
@@ -222,6 +263,19 @@ def write_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
                 data_group["time"] = times - np.min(times)
                 data_group["time"].attrs["units"] = "s"
                 data_group.attrs["axes"] = "time"
+        elif (sources := node[col_name].data_sources()) is not None:
+            # Load array data from files on disk
+            if len(sources) < 1:
+                continue
+            if len(sources) > 1:
+                raise ValueError(
+                    "Exporter cannot yet export multi-source data. "
+                    "Please submit an issue describing the use case."
+                )
+            (source,) = sources
+            insert_data_source(data_group, source)
+
+            print(sources)
         else:
             # Most likely an external dataset
             arr = node[col_name].read()
@@ -264,13 +318,14 @@ def write_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
     return stream_group
 
 
-def serialize_hdf(buff: IO[bytes], run: Container):
+def serialize_hdf(buff: IO[bytes] | Path, run: Container):
     """Encode a bluesky run into an HDF5 file with NeXus annotations.
 
     Follows the NeXuS XAS spectroscopy definition.
 
     """
-    buff.seek(0)
+    if isinstance(buff, BytesIO):
+        buff.seek(0)
     with h5py.File(buff, mode="w") as nxfile:
         # Write data entry to the nexus file
         write_run(nxfile=nxfile, run=run)
@@ -302,9 +357,7 @@ def export_hdf(uid: str, target_dir: Path, *, raw_profile: str, processed_profil
     raw_catalog = from_profile(raw_profile)
     run = raw_catalog[uid]
     target_file = target_dir / build_file_name(run.metadata)
-    with open(target_file, mode="ab+") as fd:
-        print(fd)
-        serialize_hdf(buff=fd, run=run)
+    serialize_hdf(buff=target_file, run=run)
 
 
 def main(args: Sequence[str] | None = None):
