@@ -12,6 +12,7 @@ python = ">=3.14.4,<3.15"
 [pypi-dependencies]
 oaty-bar = { path = ".", editable = true }
 tiled = { version = ">=0.2.9, <0.3", extras = ["client"] }
+h5py = ">=3.16.0, <4"
 
 [environments]
 dev = { features = ["dev"] }
@@ -24,6 +25,9 @@ isort = ">=8.0.1, <9"
 mypy = ">=1.20.2, <2"
 sphinx = ">=9.1.0, <10"
 sphinx-rtd-theme = ">=3.1.0, <4"
+pytest-asyncio = ">=1.3.0, <2"
+nexusformat = ">=2.0.2, <3"
+tiled = { version = ">=0.2.9, <0.3", extras = ["server"] }
 
 [feature.dev.tasks]
 test-all = [
