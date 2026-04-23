@@ -18,9 +18,11 @@ hdf5plugin = ">=6.0.0, <7"
 [environments]
 dev = { features = ["dev"] }
 
+[feature.dev.dependencies]
+
 [feature.dev.pypi-dependencies]
+pytest = ">=9.0.3"
 ruff = ">=0.15.11, <0.16"
-pytest = "*"
 black = ">=26.3.1, <27"
 isort = ">=8.0.1, <9"
 mypy = ">=1.20.2, <2"
