@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -7,6 +8,8 @@ from tiled.adapters.mapping import MapAdapter
 from tiled.adapters.table import TableAdapter
 from tiled.client import Context, from_context
 from tiled.server.app import build_app
+
+data_dir = Path(__file__).parent / "data"
 
 # Tiled data to use for testing
 # Some mocked test data
@@ -310,6 +313,32 @@ xafs_tree = MapAdapter(
         ),
     },
     metadata=xafs_run_metadata,
+)
+
+
+# Reference 4219b3e8-97ba-434c-b564-95b9d0fc921b
+xrf_tree = MapAdapter(
+    {
+        "primary": MapAdapter(
+            {
+                # Add energies for points 1-3: [6911. , 6915.8, 6921.]
+                "ge_2element": ArrayAdapter.from_array(
+                    np.load(data_dir / "xrf_spectra.npy")
+                ),
+                "monochromator-energy": ArrayAdapter.from_array(
+                    [6911.0, 6915.8, 6921.0]
+                ),
+            },
+            metadata={
+                "configuration": {
+                    "ge_2element": {
+                        "ge_2element-ev_per_bin": 10,
+                    },
+                },
+            },
+        ),
+    },
+    metadata={"start": {"uid": "12345"}},
 )
 
 

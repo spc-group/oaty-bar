@@ -1,7 +1,7 @@
-import asyncio
-from typing import Sequence
 import argparse
+import asyncio
 import logging
+from typing import Sequence
 
 log = logging.getLogger("oaty-bar")
 
@@ -17,5 +17,5 @@ def main(argv: Sequence[str] | None = None):
         prog="dispatch-workflows",
         description="Listen for new Tiled runs, and dispatch data management workflows in response.",
     )
-    args = parser.parse(argv)
+    args = parser.parse_args(argv)
     asyncio.run(run_dispatcher())

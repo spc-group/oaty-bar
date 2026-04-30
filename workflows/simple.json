@@ -1,0 +1,21 @@
+{
+    "name"        : "simple",
+    "owner"       : "s25idcuser",
+    "userAccount" : "s25idcuser",
+    "stages"      : {
+        "010-START"  : {
+            "command" : "/bin/date +%Y%m%d%H%M%S",
+            "outputVariableRegexList" : ["(?P<timeStamp>.*)"]
+        },
+	"020-FIT_FLUORESCENCE" : {
+	    "command": "/APSshare/bin/pixi run --manifest-path ~/src/oaty-bar fit-fluorescence $uid",
+	},
+        "030-EXPORT": {
+            "command" : "/APSshare/bin/pixi run --manifest-path ~/src/oaty-bar export-hdf $uid $target_folder"
+        },
+        "040-DONE"   : {
+            "command" : "/bin/echo 'STOP JOB ID: $id' >> /tmp/workflow.$timeStamp/$id.out"
+        }
+    },
+    "description" : "Processing for a Bluesky scan that has no significant data processing needs"
+}
