@@ -58,52 +58,65 @@ def xrf_datasets(run, results_node):
     """
     for stream_name, stream in run.items():
         config = stream.metadata.get("configuration", {})
-        data_keys = stream.metadata.get("data_keys", {})
         results_stream = results_node.get(stream_name, None)
-        for name, node in stream.items():
+        for name, this_config in config.items():
             # Check if this is actually a fluorescence spectrum
-            this_config = config.get(name, {})
             ev_per_bin = this_config.get(f"{name}-ev_per_bin", None)
             if ev_per_bin is not None:
                 if results_stream is None:
                     # We don't have a node for stream results yet, so make one
                     results_stream = results_node.create_container(stream_name)
-                yield (node, results_stream)
+                yield (stream[name], results_stream)
 
 
-def _fit_spectrum(node, slc: tuple[int, int], ev_per_bin: int | float, model: XRFModel):
+async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
     """Read and fit an individual spectrum from the array of spectra."""
     t0 = time.perf_counter()
-    spectrum = node.read(slc)
     # Larch expects data packaged into `Group` objects
     mca = Group()
     mca.counts = spectrum
-    num_bins = node.shape[-1]
+    num_bins = spectrum.shape[0]
     energy_start = ev_per_bin * 0.5
     energy_stop = ev_per_bin * (num_bins + 0.5)
     mca.energy = np.linspace(energy_start, energy_stop, num=num_bins)
     # Execute the fit
     result = model.fit_spectrum(mca)
     decomp = result.decompose_spectrum(spectrum)
-    log.debug(f"Fit spectrum {slc} in {time.perf_counter()-t0:.2f} seconds")
+    log.debug(f"Fit spectrum in {time.perf_counter()-t0:.2f} seconds")
     return decomp
+
+
+async def fit_frame(
+    node: ArrayClient, frame_num: int, energy: int | float, ev_per_bin: float | int
+):
+    loop = asyncio.get_running_loop()
+    frame = await loop.run_in_executor(None, node.read, frame_num)
+    async with TaskGroup() as tg:
+        models = [
+            xrf_model(xray_energy=energy / 1000, energy_max=40)
+            for i in range(frame.shape[0])
+        ]
+        coros = [
+            _fit_spectrum(spectrum, ev_per_bin, model)
+            for spectrum, model in zip(frame, models)
+        ]
+        tasks = [tg.create_task(coro) for coro in coros]
+    results = [task.result() for task in tasks]
+    return results
 
 
 async def fit_array(node: ArrayClient, energies, results_stream: Container):
     """Fit an array of spectra in an array."""
     ev_per_bin = 10
-    loop = asyncio.get_running_loop()
     detector_name = node.path_parts[-1]
-    coros = []
-    for event, energy in zip(range(node.shape[0]), energies):
-        for elem in range(node.shape[1]):
-            # Every spectrum needs its own unique model
-            model = xrf_model(xray_energy=energy / 1000, energy_max=40)
-            coro = loop.run_in_executor(
-                None, _fit_spectrum, node, (event, elem), ev_per_bin, model
-            )
-            coros.append(coro)
-    results = await asyncio.gather(*coros)
+    async with TaskGroup() as tg:
+        tasks = [
+            tg.create_task(fit_frame(node, event, energy, ev_per_bin))
+            for event, energy in zip(range(node.shape[0]), energies)
+        ]
+    # Results come out nested, so flatten them
+    results = [task.result() for task in tasks]
+    results = [result for result_set in results for result in result_set]
     # Extract the elemental abundance from the spectrum results
     # from pprint import pprint
     # print(len(results))
