@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import numpy as np
 from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
+from tiled.client import from_profile
 from tiled.client.array import ArrayClient
 from tiled.client.container import Container
 from tiled.queries import Eq
@@ -167,13 +168,13 @@ def main(args: Sequence[str] | None = None):
         "--raw-profile", help="The name of the Tiled profile used for raw runs."
     )
     parser.add_argument(
-        "--processed-profile",
+        "--results-profile",
         help="The name of the Tiled profile used for processed run data.",
     )
     parsed = parser.parse_args(args)
+    # Load the necessary Tiled catalogs
+    raw_catalog = from_profile(parsed.raw_profile)
+    run = raw_catalog[parsed.uid]
+    results_catalog = from_profile(parsed.results_profile)
     # Do the actual exporting
-    # fit_fluorescence(
-    #     uid=parsed.uid,
-    #     raw_profile=parsed.raw_profile,
-    #     processed_profile=parsed.processed_profile,
-    # )
+    asyncio.run(fit_fluorescence(run=run, results_catalog=results_catalog))
