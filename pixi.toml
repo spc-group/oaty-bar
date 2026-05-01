@@ -17,6 +17,8 @@ h5py = ">=3.16.0, <4"
 hdf5plugin = ">=6.0.0, <7"
 bluesky-tiled-plugins = ">=2.0.2, <3"
 xraylarch = ">=2026.1.2, <2027"
+chemformula = ">=1.5.1, <2"
+peakutils = ">=1.3.5, <2"
 
 [environments]
 dev = { features = ["dev"] }

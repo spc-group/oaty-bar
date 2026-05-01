@@ -338,7 +338,7 @@ xrf_tree = MapAdapter(
             },
         ),
     },
-    metadata={"start": {"uid": "12345"}},
+    metadata={"start": {"uid": "12345", "chemical_formula": "Cr3O4"}},
 )
 
 

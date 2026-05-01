@@ -3,9 +3,11 @@ import asyncio
 import logging
 import time
 from asyncio import TaskGroup
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import numpy as np
+import peakutils
+from chemformula import ChemFormula
 from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
 from tiled.client import from_profile
@@ -17,8 +19,18 @@ from xraydb import material_mu
 log = logging.getLogger("oaty-bar")
 
 
+def parse_chemical_formula(formula: str) -> Mapping[str, int]:
+    """Extract the elements and their abundances from a chemical formula."""
+    return ChemFormula(formula).element
+
+
 def xrf_model(
-    xray_energy=None, energy_min=1.5, energy_max=None, use_bgr=False, **kws
+    xray_energy=None,
+    energy_min=1.5,
+    energy_max=None,
+    use_bgr=True,
+    elements: Mapping[str, int | float] = {},
+    **kws,
 ) -> XRFModel:
     """create an XRF model
 
@@ -28,7 +40,6 @@ def xrf_model(
     """
     model = XRFModel(
         xray_energy=xray_energy,
-        use_bgr=use_bgr,
         energy_min=energy_min,
         energy_max=energy_max,
         **kws,
@@ -36,7 +47,10 @@ def xrf_model(
     model.set_detector(material="Ge", thickness=1.0)
     model.add_escape()
     model.add_pileup()
-    model.add_element("Cr")
+    # print(help(model.add_element))
+    # assert False
+    for element, amplitude in elements.items():
+        model.add_element(element, amplitude=amplitude)
     model.add_element("Ar")
     model.add_scatter_peak()
     return model
@@ -79,21 +93,29 @@ async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
     energy_start = ev_per_bin * 0.5
     energy_stop = ev_per_bin * (num_bins + 0.5)
     mca.energy = np.linspace(energy_start, energy_stop, num=num_bins)
-    # Execute the fit
-    result = model.fit_spectrum(mca)
+    # Execute the fit, use peakutils until we can get larch background working
+    # bg = xrf_background(energy=mca.energy/1000, counts=mca.counts)
+    bg = peakutils.baseline(mca.counts, deg=4)
+    model.add_background(bg)
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, model.fit_spectrum, mca)
     decomp = result.decompose_spectrum(spectrum)
     log.debug(f"Fit spectrum in {time.perf_counter()-t0:.2f} seconds")
     return decomp
 
 
 async def fit_frame(
-    node: ArrayClient, frame_num: int, energy: int | float, ev_per_bin: float | int
+    node: ArrayClient,
+    frame_num: int,
+    energy: int | float,
+    ev_per_bin: float | int,
+    elements: Mapping[str, int | float],
 ):
     loop = asyncio.get_running_loop()
     frame = await loop.run_in_executor(None, node.read, frame_num)
     async with TaskGroup() as tg:
         models = [
-            xrf_model(xray_energy=energy / 1000, energy_max=40)
+            xrf_model(xray_energy=energy / 1000, energy_max=40, elements=elements)
             for i in range(frame.shape[0])
         ]
         coros = [
@@ -105,13 +127,20 @@ async def fit_frame(
     return results
 
 
-async def fit_array(node: ArrayClient, energies, results_stream: Container):
+async def fit_array(
+    node: ArrayClient,
+    energies,
+    results_stream: Container,
+    elements: Mapping[str, int | float],
+):
     """Fit an array of spectra in an array."""
     ev_per_bin = 10
     detector_name = node.path_parts[-1]
     async with TaskGroup() as tg:
         tasks = [
-            tg.create_task(fit_frame(node, event, energy, ev_per_bin))
+            tg.create_task(
+                fit_frame(node, event, energy, ev_per_bin, elements=elements)
+            )
             for event, energy in zip(range(node.shape[0]), energies)
         ]
     # Results come out nested, so flatten them
@@ -122,12 +151,12 @@ async def fit_array(node: ArrayClient, energies, results_stream: Container):
     # print(len(results))
     # pprint(results[0])
     # pprint([p for p in results[0].params])
-    import matplotlib.pyplot as plt
-
-    for result, slc in zip(results, [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]):
-        plt.plot(result.total)
-        plt.plot(node.read()[slc[0], slc[1]])
-        plt.show()
+    # import matplotlib.pyplot as plt
+    # for result, slc in zip(results, [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]):
+    #     plt.plot(result.total)
+    #     plt.plot(node.read()[slc[0], slc[1]])
+    #     plt.xlim(400, 800)
+    #     plt.show()
     peak_names = list(results[0].weights.keys())
     new_signals = {}
     for peak in peak_names:
@@ -157,16 +186,19 @@ async def fit_fluorescence(run: Container, results_catalog: Container):
     # Fit the whole array concurrently
     energies = run["primary/monochromator-energy"].read()
     results_run = _results_container(run, results_catalog)
+    elements = parse_chemical_formula(run.metadata["start"]["chemical_formula"])
 
     async with TaskGroup() as tg:
-        for source_node, results_stream in xrf_datasets(run, results_run):
-            tasks.append(
-                tg.create_task(
-                    fit_array(
-                        source_node, energies=energies, results_stream=results_stream
-                    )
-                )
+        coros = [
+            fit_array(
+                source_node,
+                energies=energies,
+                results_stream=results_stream,
+                elements=elements,
             )
+            for source_node, results_stream in xrf_datasets(run, results_run)
+        ]
+        tasks = [tg.create_task(coro) for coro in coros]
 
 
 def main(args: Sequence[str] | None = None):

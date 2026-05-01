@@ -3,7 +3,7 @@ from tiled.adapters.mapping import MapAdapter
 from tiled.client import Context, from_context
 from tiled.server.app import build_app, build_app_from_config
 
-from oaty_bar._fit_fluorescence import fit_fluorescence
+from oaty_bar._fit_fluorescence import fit_fluorescence, parse_chemical_formula
 
 from .tiled_trees import xrf_tree
 
@@ -42,9 +42,27 @@ def results_catalog(tmp_path):
 async def test_writes_result_container(xrf_catalog, results_catalog):
     run = xrf_catalog["xrf_run"]
     await fit_fluorescence(run=run, results_catalog=results_catalog)
-    # plt.plot(np.linspace(5, 40965, num=4096), run['primary']['ge_2element'].read()[0,0])
-    # plt.show()
     assert len(results_catalog.keys()) == 1
     result = results_catalog.values().first()
     assert result.metadata["run_uid"] == "12345"
-    assert "ge_2element-Cr" in result["primary"].keys()
+    result_keys = list(result["primary"].keys())
+    assert "ge_2element-Cr" in result_keys
+    assert "ge_2element-O" in result_keys
+    assert "ge_2element-Ar" in result_keys
+    assert "ge_2element-elastic" in result_keys
+    assert "ge_2element-background" in result_keys
+    assert "ge_2element-pileup" in result_keys
+    # assert "ge_2element-χ²" in result_keys
+
+
+formulae = [
+    ("NaCl", {"Na": 1, "Cl": 1}),
+    ("Ni(OH)2", {"Ni": 1, "O": 2, "H": 2}),
+    # This one should actually be 0.33, but chemformula gets this wrong
+    ("Ni0.33Mn0.33Co0.33O2", {"Ni": 33, "Mn": 33, "Co": 33, "O": 2}),
+]
+
+
+@pytest.mark.parametrize("formula,parsed", formulae)
+def test_parse_chemical_formula(formula, parsed):
+    assert parse_chemical_formula(formula) == parsed
