@@ -1,10 +1,10 @@
 import argparse
 import asyncio
 import logging
-from dataclasses import dataclass
 import time
 from asyncio import TaskGroup
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 import numpy as np
 import peakutils
@@ -15,7 +15,7 @@ from tiled.client import from_profile
 from tiled.client.array import ArrayClient
 from tiled.client.container import Container
 from tiled.queries import Eq
-from xraydb import material_mu, xray_edge, get_xraydb
+from xraydb import get_xraydb, material_mu
 
 log = logging.getLogger("oaty-bar")
 
@@ -108,7 +108,7 @@ async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
     output = await loop.run_in_executor(None, model.fit_spectrum, mca)
     decomp = output.decompose_spectrum(spectrum)
     result = FitResult(
-        goodness = output.redchi,
+        goodness=output.redchi,
         weights=decomp.weights,
     )
     log.debug(f"Fit spectrum in {time.perf_counter()-t0:.2f} seconds")
@@ -168,7 +168,7 @@ async def fit_array(
     #     plt.xlim(400, 800)
     #     plt.show()
 
-    # Extract the elemental abundance from the spectrum results    
+    # Extract the elemental abundance from the spectrum results
     def merge_values(arr, op):
         arr = np.asarray(arr)
         arr = arr.reshape(node.shape[:2])
@@ -180,7 +180,9 @@ async def fit_array(
     for peak in peak_names:
         weights = [result.weights[peak] for result in results]
         new_signals[peak] = merge_values(weights, op=np.sum)
-    new_signals['χ²'] = merge_values([result.goodness for result in results], op=np.mean)
+    new_signals["χ²"] = merge_values(
+        [result.goodness for result in results], op=np.mean
+    )
     # Write these are separate arrays, maybe this could be a table in the future?
     for signal_name, arr in new_signals.items():
         results_stream.write_array(arr, key=f"{detector_name}-{signal_name}")

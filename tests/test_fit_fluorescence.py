@@ -1,13 +1,18 @@
+import chemformula
+import numpy as np
 import pytest
 from tiled.adapters.mapping import MapAdapter
 from tiled.client import Context, from_context
 from tiled.server.app import build_app, build_app_from_config
 
-import numpy as np
-import chemformula
+from oaty_bar._fit_fluorescence import (
+    _fit_spectrum,
+    fit_fluorescence,
+    parse_chemical_formula,
+    xrf_model,
+)
 
-from oaty_bar._fit_fluorescence import fit_fluorescence, parse_chemical_formula, xrf_model, _fit_spectrum
-from .tiled_trees import xrf_tree, data_dir
+from .tiled_trees import data_dir, xrf_tree
 
 
 @pytest.fixture(scope="module")

@@ -3,6 +3,7 @@ import datetime as dt
 import json
 import logging
 import re
+import warnings
 from collections.abc import Mapping, Sequence
 from io import BytesIO
 from pathlib import Path
@@ -244,6 +245,11 @@ def write_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
     for col_name, desc in metadata["data_keys"].items():
         data_group = nxdata(stream_group, col_name)
         is_internal = internal is not None and col_name in internal
+        # Check for pathologies
+        if not is_internal and col_name not in node:
+            warnings.warn(f"'{col_name}' in {node.uri} has a data key but no array.")
+            continue
+        # Write the dataset
         if is_internal:
             # Save internal dataset
             try:
@@ -274,8 +280,6 @@ def write_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
                 )
             (source,) = sources
             insert_data_source(data_group, source)
-
-            print(sources)
         else:
             # Most likely an external dataset
             arr = node[col_name].read()
