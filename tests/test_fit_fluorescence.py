@@ -3,9 +3,11 @@ from tiled.adapters.mapping import MapAdapter
 from tiled.client import Context, from_context
 from tiled.server.app import build_app, build_app_from_config
 
-from oaty_bar._fit_fluorescence import fit_fluorescence, parse_chemical_formula
+import numpy as np
+import chemformula
 
-from .tiled_trees import xrf_tree
+from oaty_bar._fit_fluorescence import fit_fluorescence, parse_chemical_formula, xrf_model, _fit_spectrum
+from .tiled_trees import xrf_tree, data_dir
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +54,26 @@ async def test_writes_result_container(xrf_catalog, results_catalog):
     assert "ge_2element-elastic" in result_keys
     assert "ge_2element-background" in result_keys
     assert "ge_2element-pileup" in result_keys
-    # assert "ge_2element-χ²" in result_keys
+    assert "ge_2element-χ²" in result_keys
+
+
+test_datasets = [
+    # (data file, UID, xray_energy, χ²)
+    ("4219b3e8-97ba-434c-b564-95b9d0fc921b_0-0.npy", "Cr", 6911.0, 0.52),
+]
+
+
+@pytest.mark.parametrize("data_file,formula,xray_energy,target", test_datasets)
+@pytest.mark.asyncio
+async def test_goodness_of_fits(data_file, formula, xray_energy, target):
+    """Check that we can reliable fit a variety of spectra."""
+    spectrum = np.load(data_dir / data_file)
+    elements = chemformula.ChemFormula(formula).element
+    model = xrf_model(xray_energy=xray_energy, elements=elements)
+    # Do the fitting
+    result = await _fit_spectrum(spectrum, ev_per_bin=10, model=model)
+    # Check the fitting accuracy
+    assert result.goodness == pytest.approx(target, abs=0.01)
 
 
 formulae = [

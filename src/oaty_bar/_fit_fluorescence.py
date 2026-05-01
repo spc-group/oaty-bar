@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+from dataclasses import dataclass
 import time
 from asyncio import TaskGroup
 from collections.abc import Mapping, Sequence
@@ -14,9 +15,15 @@ from tiled.client import from_profile
 from tiled.client.array import ArrayClient
 from tiled.client.container import Container
 from tiled.queries import Eq
-from xraydb import material_mu
+from xraydb import material_mu, xray_edge, get_xraydb
 
 log = logging.getLogger("oaty-bar")
+
+
+@dataclass(frozen=True, eq=True)
+class FitResult:
+    goodness: float
+    weights: Mapping[str, float]
 
 
 def parse_chemical_formula(formula: str) -> Mapping[str, int]:
@@ -47,11 +54,11 @@ def xrf_model(
     model.set_detector(material="Ge", thickness=1.0)
     model.add_escape()
     model.add_pileup()
-    # print(help(model.add_element))
-    # assert False
+    # Add sample elements plus Ar since it's in a lot of detectors
     for element, amplitude in elements.items():
         model.add_element(element, amplitude=amplitude)
     model.add_element("Ar")
+    # Add an elastic peak
     model.add_scatter_peak()
     return model
 
@@ -98,10 +105,14 @@ async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
     bg = peakutils.baseline(mca.counts, deg=4)
     model.add_background(bg)
     loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, model.fit_spectrum, mca)
-    decomp = result.decompose_spectrum(spectrum)
+    output = await loop.run_in_executor(None, model.fit_spectrum, mca)
+    decomp = output.decompose_spectrum(spectrum)
+    result = FitResult(
+        goodness = output.redchi,
+        weights=decomp.weights,
+    )
     log.debug(f"Fit spectrum in {time.perf_counter()-t0:.2f} seconds")
-    return decomp
+    return result
 
 
 async def fit_frame(
@@ -146,7 +157,6 @@ async def fit_array(
     # Results come out nested, so flatten them
     results = [task.result() for task in tasks]
     results = [result for result_set in results for result in result_set]
-    # Extract the elemental abundance from the spectrum results
     # from pprint import pprint
     # print(len(results))
     # pprint(results[0])
@@ -157,16 +167,23 @@ async def fit_array(
     #     plt.plot(node.read()[slc[0], slc[1]])
     #     plt.xlim(400, 800)
     #     plt.show()
+
+    # Extract the elemental abundance from the spectrum results    
+    def merge_values(arr, op):
+        arr = np.asarray(arr)
+        arr = arr.reshape(node.shape[:2])
+        arr = op(arr, axis=1)
+        return arr
+
     peak_names = list(results[0].weights.keys())
     new_signals = {}
     for peak in peak_names:
-        weights = np.asarray([result.weights[peak] for result in results])
-        weights = weights.reshape(node.shape[:2])
-        weights = np.sum(weights, axis=1)
-        new_signals[peak] = weights
+        weights = [result.weights[peak] for result in results]
+        new_signals[peak] = merge_values(weights, op=np.sum)
+    new_signals['χ²'] = merge_values([result.goodness for result in results], op=np.mean)
     # Write these are separate arrays, maybe this could be a table in the future?
-    for element_name, arr in new_signals.items():
-        results_stream.write_array(arr, key=f"{detector_name}-{element_name}")
+    for signal_name, arr in new_signals.items():
+        results_stream.write_array(arr, key=f"{detector_name}-{signal_name}")
 
 
 def _results_container(run, catalog):
@@ -181,7 +198,8 @@ def _results_container(run, catalog):
 
 async def fit_fluorescence(run: Container, results_catalog: Container):
     tasks = []
-    # xraydb.MATERIALS is not thread-safe, so pre-load the db
+    # xraydb is not thread-safe, so pre-load the db
+    get_xraydb()
     material_mu("Ge", 1000)
     # Fit the whole array concurrently
     energies = run["primary/monochromator-energy"].read()
