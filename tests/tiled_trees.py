@@ -332,7 +332,16 @@ xrf_tree = MapAdapter(
             metadata={
                 "configuration": {
                     "ge_2element": {
-                        "ge_2element-ev_per_bin": 10,
+                        "data": {
+                            "ge_2element-ev_per_bin": 10,
+                            "ge_2element-sensor_material": "Ge",
+                            "ge_2element-sensor_thickness": 6.0,
+                        },
+                        "data_keys": {
+                            "ge_2element-sensor_thickness": {
+                                "units": "mm",
+                            }
+                        },
                     },
                 },
             },

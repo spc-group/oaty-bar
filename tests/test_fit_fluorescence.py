@@ -9,6 +9,7 @@ from oaty_bar._fit_fluorescence import (
     _fit_spectrum,
     fit_fluorescence,
     parse_chemical_formula,
+    ureg,
     xrf_model,
 )
 
@@ -52,6 +53,7 @@ async def test_writes_result_container(xrf_catalog, results_catalog):
     assert len(results_catalog.keys()) == 1
     result = results_catalog.values().first()
     assert result.metadata["run_uid"] == "12345"
+    print(list(result.keys()))
     result_keys = list(result["primary"].keys())
     assert "ge_2element-Cr" in result_keys
     assert "ge_2element-O" in result_keys
@@ -60,6 +62,15 @@ async def test_writes_result_container(xrf_catalog, results_catalog):
     assert "ge_2element-background" in result_keys
     assert "ge_2element-pileup" in result_keys
     assert "ge_2element-χ²" in result_keys
+
+
+@pytest.mark.asyncio
+async def test_setup_xrf_model(xrf_catalog, results_catalog):
+    run = xrf_catalog["xrf_run"]
+    results = await fit_fluorescence(run=run, results_catalog=results_catalog)
+    model = results[0][0].model
+    assert model.detector.material == "Ge"
+    assert model.detector.thickness == pytest.approx(0.6)
 
 
 test_datasets = [
@@ -74,9 +85,18 @@ async def test_goodness_of_fits(data_file, formula, xray_energy, target):
     """Check that we can reliable fit a variety of spectra."""
     spectrum = np.load(data_dir / data_file)
     elements = chemformula.ChemFormula(formula).element
-    model = xrf_model(xray_energy=xray_energy, elements=elements)
+    model = xrf_model(
+        xray_energy=xray_energy,
+        elements=elements,
+        detector_material="Ge",
+        detector_thickness=ureg("6 mm"),
+    )
     # Do the fitting
-    result = await _fit_spectrum(spectrum, ev_per_bin=10, model=model)
+    result = await _fit_spectrum(
+        spectrum,
+        ev_per_bin=10,
+        model=model,
+    )
     # Check the fitting accuracy
     assert result.goodness == pytest.approx(target, abs=0.01)
 

@@ -10,6 +10,7 @@ import numpy as np
 from chemformula import ChemFormula
 from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
+from pint import Quantity, UnitRegistry
 from pybaselines import Baseline
 from tiled.client import from_profile
 from tiled.client.array import ArrayClient
@@ -18,6 +19,7 @@ from tiled.queries import Eq
 from xraydb import get_xraydb, material_mu
 
 log = logging.getLogger("oaty-bar")
+ureg = UnitRegistry()
 
 
 @dataclass(frozen=True, eq=True)
@@ -25,6 +27,7 @@ class FitResult:
     goodness: float
     weights: Mapping[str, float]
     predicted: np.ndarray
+    model: XRFModel
 
 
 def parse_chemical_formula(formula: str) -> Mapping[str, int]:
@@ -33,12 +36,13 @@ def parse_chemical_formula(formula: str) -> Mapping[str, int]:
 
 
 def xrf_model(
-    xray_energy=None,
+    xray_energy: int | float,
+    detector_material: str | None,
+    detector_thickness: Quantity,
     energy_min=1.5,
     energy_max=None,
     use_bgr=True,
     elements: Mapping[str, int | float] = {},
-    **kws,
 ) -> XRFModel:
     """create an XRF model
 
@@ -50,9 +54,10 @@ def xrf_model(
         xray_energy=xray_energy,
         energy_min=energy_min,
         energy_max=energy_max,
-        **kws,
     )
-    model.set_detector(material="Ge", thickness=0.6)
+    if detector_material is not None:
+        thickness_cm = detector_thickness.to("cm").magnitude
+        model.set_detector(material=detector_material, thickness=thickness_cm)
     model.add_escape()
     model.add_pileup()
     # Add sample elements plus Ar since it's in a lot of detectors
@@ -72,23 +77,18 @@ def xrf_datasets(run, results_node):
 
     Yields
     ======
-    node
-      The node with the source data.
-    result_node
-      A node in the results node for the given datasets stream.
+    target
+      Details of how the fit should be performed
 
     """
     for stream_name, stream in run.items():
         config = stream.metadata.get("configuration", {})
-        results_stream = results_node.get(stream_name, None)
         for name, this_config in config.items():
             # Check if this is actually a fluorescence spectrum
-            ev_per_bin = this_config.get(f"{name}-ev_per_bin", None)
+            config_data = this_config.get("data", {})
+            ev_per_bin = config_data.get(f"{name}-ev_per_bin", None)
             if ev_per_bin is not None:
-                if results_stream is None:
-                    # We don't have a node for stream results yet, so make one
-                    results_stream = results_node.create_container(stream_name)
-                yield (stream[name], results_stream)
+                yield stream[name]
 
 
 async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
@@ -114,6 +114,7 @@ async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
         goodness=output.redchi,
         weights=decomp.weights,
         predicted=decomp.total,
+        model=model,
     )
     log.debug(f"Fit spectrum in {time.perf_counter()-t0:.2f} seconds")
     return result
@@ -125,12 +126,20 @@ async def fit_frame(
     energy: int | float,
     ev_per_bin: float | int,
     elements: Mapping[str, int | float],
+    detector_material: str,
+    detector_thickness: Quantity,
 ):
     loop = asyncio.get_running_loop()
     frame = await loop.run_in_executor(None, node.read, frame_num)
     async with TaskGroup() as tg:
         models = [
-            xrf_model(xray_energy=energy / 1000, energy_max=40, elements=elements)
+            xrf_model(
+                xray_energy=energy / 1000,
+                energy_max=40,
+                elements=elements,
+                detector_material=detector_material,
+                detector_thickness=detector_thickness,
+            )
             for i in range(frame.shape[0])
         ]
         coros = [
@@ -147,6 +156,9 @@ async def fit_array(
     energies,
     results_stream: Container,
     elements: Mapping[str, int | float],
+    ev_per_bin: int | float,
+    detector_material: str,
+    detector_thickness: Quantity,
 ):
     """Fit an array of spectra in an array."""
     ev_per_bin = 10
@@ -154,7 +166,15 @@ async def fit_array(
     async with TaskGroup() as tg:
         tasks = [
             tg.create_task(
-                fit_frame(node, event, energy, ev_per_bin, elements=elements)
+                fit_frame(
+                    node,
+                    event,
+                    energy,
+                    ev_per_bin,
+                    elements=elements,
+                    detector_material=detector_material,
+                    detector_thickness=detector_thickness,
+                )
             )
             for event, energy in zip(range(node.shape[0]), energies)
         ]
@@ -165,13 +185,13 @@ async def fit_array(
     # print(len(results))
     # pprint(results[0])
     # pprint([p for p in results[0].params])
-    import matplotlib.pyplot as plt
+    # import matplotlib.pyplot as plt
 
-    for result, slc in zip(results, [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]):
-        plt.plot(result.predicted)
-        plt.plot(node.read()[slc[0], slc[1]])
-        # plt.xlim(400, 800)
-        plt.show()
+    # for result, slc in zip(results, [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]):
+    #     plt.plot(result.predicted)
+    #     plt.plot(node.read()[slc[0], slc[1]])
+    #     # plt.xlim(400, 800)
+    #     plt.show()
 
     # Extract the elemental abundance from the spectrum results
     def merge_values(arr, op):
@@ -191,6 +211,7 @@ async def fit_array(
     # Write these are separate arrays, maybe this could be a table in the future?
     for signal_name, arr in new_signals.items():
         results_stream.write_array(arr, key=f"{detector_name}-{signal_name}")
+    return results
 
 
 def _results_container(run, catalog):
@@ -203,8 +224,16 @@ def _results_container(run, catalog):
         return existing_runs.values().first()
 
 
+def detector_metadata(config, name):
+    material = config["data"][f"{name}-sensor_material"]
+    thickness = config["data"][f"{name}-sensor_thickness"]
+    units = config["data_keys"][f"{name}-sensor_thickness"]["units"]
+    thickness = ureg(f"{thickness} {units}")
+    return material, thickness
+
+
 async def fit_fluorescence(run: Container, results_catalog: Container):
-    tasks = []
+    tasks: list[asyncio.Task] = []
     # xraydb is not thread-safe, so pre-load the db
     get_xraydb()
     material_mu("Ge", 1000)
@@ -214,16 +243,41 @@ async def fit_fluorescence(run: Container, results_catalog: Container):
     elements = parse_chemical_formula(run.metadata["start"]["chemical_formula"])
 
     async with TaskGroup() as tg:
-        coros = [
-            fit_array(
+        nodes = xrf_datasets(run, results_run)
+        tasks = []
+        for source_node in nodes:
+            stream_name, array_name = source_node.path_parts[-2:]
+            stream = source_node.parent
+            config = stream.metadata["configuration"][array_name]
+            ev_per_bin = config["data"][f"{array_name}-ev_per_bin"]
+            material, thickness = detector_metadata(config, array_name)
+            results_stream = results_run.get(stream_name)
+            if results_stream is None:
+                # We don't have a node for stream results yet, so make one
+                results_stream = results_run.create_container(stream_name)
+                log.info(f"Created new result stream '{results_stream.uri}'.")
+            coro = fit_array(
                 source_node,
-                energies=energies,
+                energies,
                 results_stream=results_stream,
                 elements=elements,
+                ev_per_bin=ev_per_bin,
+                detector_material=material,
+                detector_thickness=thickness,
             )
-            for source_node, results_stream in xrf_datasets(run, results_run)
-        ]
-        tasks = [tg.create_task(coro) for coro in coros]
+            tasks.append(tg.create_task(coro))
+        # coros = [
+        #     fit_array(
+        #         source_node,
+        #         energies=energies,
+        #         results_stream=results_stream,
+        #         elements=elements,
+        #     )
+        #     for (source_node, results_stream) in xrf_datasets(run, results_run)
+        # ]
+        # tasks = [tg.create_task(coro) for coro in coros]
+    results = [task.result() for task in tasks]
+    return results
 
 
 def main(args: Sequence[str] | None = None):
