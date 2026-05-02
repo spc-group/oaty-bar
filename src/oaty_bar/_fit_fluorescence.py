@@ -7,10 +7,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
-import peakutils
 from chemformula import ChemFormula
 from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
+from pybaselines import Baseline
 from tiled.client import from_profile
 from tiled.client.array import ArrayClient
 from tiled.client.container import Container
@@ -24,6 +24,7 @@ log = logging.getLogger("oaty-bar")
 class FitResult:
     goodness: float
     weights: Mapping[str, float]
+    predicted: np.ndarray
 
 
 def parse_chemical_formula(formula: str) -> Mapping[str, int]:
@@ -51,7 +52,7 @@ def xrf_model(
         energy_max=energy_max,
         **kws,
     )
-    model.set_detector(material="Ge", thickness=1.0)
+    model.set_detector(material="Ge", thickness=0.6)
     model.add_escape()
     model.add_pileup()
     # Add sample elements plus Ar since it's in a lot of detectors
@@ -102,7 +103,9 @@ async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
     mca.energy = np.linspace(energy_start, energy_stop, num=num_bins)
     # Execute the fit, use peakutils until we can get larch background working
     # bg = xrf_background(energy=mca.energy/1000, counts=mca.counts)
-    bg = peakutils.baseline(mca.counts, deg=4)
+    # bg = peakutils.baseline(mca.counts, deg=4)
+    baseline = Baseline(x_data=mca.energy)
+    bg, bg_params = baseline.imodpoly(spectrum)
     model.add_background(bg)
     loop = asyncio.get_running_loop()
     output = await loop.run_in_executor(None, model.fit_spectrum, mca)
@@ -110,6 +113,7 @@ async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
     result = FitResult(
         goodness=output.redchi,
         weights=decomp.weights,
+        predicted=decomp.total,
     )
     log.debug(f"Fit spectrum in {time.perf_counter()-t0:.2f} seconds")
     return result
@@ -161,12 +165,13 @@ async def fit_array(
     # print(len(results))
     # pprint(results[0])
     # pprint([p for p in results[0].params])
-    # import matplotlib.pyplot as plt
-    # for result, slc in zip(results, [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]):
-    #     plt.plot(result.total)
-    #     plt.plot(node.read()[slc[0], slc[1]])
-    #     plt.xlim(400, 800)
-    #     plt.show()
+    import matplotlib.pyplot as plt
+
+    for result, slc in zip(results, [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]):
+        plt.plot(result.predicted)
+        plt.plot(node.read()[slc[0], slc[1]])
+        # plt.xlim(400, 800)
+        plt.show()
 
     # Extract the elemental abundance from the spectrum results
     def merge_values(arr, op):
