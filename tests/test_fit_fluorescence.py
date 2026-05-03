@@ -1,3 +1,5 @@
+import warnings
+
 import chemformula
 import numpy as np
 import pytest
@@ -14,6 +16,24 @@ from oaty_bar._fit_fluorescence import (
 )
 
 from .tiled_trees import data_dir, xrf_tree
+
+
+@pytest.fixture
+def ignore_larch_warnings():
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="Elam tables are unreliable for energies [<>] [18]00 k?eV"
+        )
+        warnings.filterwarnings(
+            "ignore",
+            category=PendingDeprecationWarning,
+            message="the matrix subclass is not the recommended way to represent matrices",
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=r"ignoring `maxfev` argument to `Minimizer\(\)`. Use `max_nfev` instead.",
+        )
+        yield
 
 
 @pytest.fixture(scope="module")
@@ -47,7 +67,9 @@ def results_catalog(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_writes_result_container(xrf_catalog, results_catalog):
+async def test_writes_result_container(
+    xrf_catalog, results_catalog, ignore_larch_warnings
+):
     run = xrf_catalog["xrf_run"]
     await fit_fluorescence(run=run, results_catalog=results_catalog)
     assert len(results_catalog.keys()) == 1
@@ -65,7 +87,7 @@ async def test_writes_result_container(xrf_catalog, results_catalog):
 
 
 @pytest.mark.asyncio
-async def test_setup_xrf_model(xrf_catalog, results_catalog):
+async def test_setup_xrf_model(xrf_catalog, results_catalog, ignore_larch_warnings):
     run = xrf_catalog["xrf_run"]
     results = await fit_fluorescence(run=run, results_catalog=results_catalog)
     model = results[0][0].model
@@ -81,7 +103,9 @@ test_datasets = [
 
 @pytest.mark.parametrize("data_file,formula,xray_energy,target", test_datasets)
 @pytest.mark.asyncio
-async def test_goodness_of_fits(data_file, formula, xray_energy, target):
+async def test_goodness_of_fits(
+    data_file, formula, xray_energy, target, ignore_larch_warnings
+):
     """Check that we can reliable fit a variety of spectra."""
     spectrum = np.load(data_dir / data_file)
     elements = chemformula.ChemFormula(formula).element
