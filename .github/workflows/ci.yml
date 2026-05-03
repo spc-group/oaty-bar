@@ -19,9 +19,13 @@ jobs:
       max-parallel: 5
     steps:
     - uses: actions/checkout@v4
-    - uses: prefix-dev/setup-pixi@v0.9.4
+    - uses: prefix-dev/setup-pixi@v0.9.5
+      env:
+        RUNNER_DEBUG: true
       with:
+        log-level: vvv
         pixi-version: v0.67.2
+        frozen: true
         cache: true
     - run: |
         pixi run lint
