@@ -4,6 +4,7 @@ import logging
 import time
 from asyncio import TaskGroup
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor as ThreadExecutor
 from dataclasses import dataclass
 
 import numpy as np
@@ -16,7 +17,6 @@ from tiled.client import from_profile
 from tiled.client.array import ArrayClient
 from tiled.client.container import Container
 from tiled.queries import Eq
-from xraydb import get_xraydb, material_mu
 
 log = logging.getLogger("oaty-bar")
 ureg = UnitRegistry()
@@ -232,50 +232,42 @@ def detector_metadata(config, name):
     return material, thickness
 
 
-async def fit_fluorescence(run: Container, results_catalog: Container):
+async def fit_fluorescence(
+    run: Container, results_catalog: Container, max_workers=None
+):
     tasks: list[asyncio.Task] = []
-    # xraydb is not thread-safe, so pre-load the db
-    get_xraydb()
-    material_mu("Ge", 1000)
     # Fit the whole array concurrently
     energies = run["primary/monochromator-energy"].read()
     results_run = _results_container(run, results_catalog)
     elements = parse_chemical_formula(run.metadata["start"]["chemical_formula"])
 
-    async with TaskGroup() as tg:
-        nodes = xrf_datasets(run, results_run)
-        tasks = []
-        for source_node in nodes:
-            stream_name, array_name = source_node.path_parts[-2:]
-            stream = source_node.parent
-            config = stream.metadata["configuration"][array_name]
-            ev_per_bin = config["data"][f"{array_name}-ev_per_bin"]
-            material, thickness = detector_metadata(config, array_name)
-            results_stream = results_run.get(stream_name)
-            if results_stream is None:
-                # We don't have a node for stream results yet, so make one
-                results_stream = results_run.create_container(stream_name)
-                log.info(f"Created new result stream '{results_stream.uri}'.")
-            coro = fit_array(
-                source_node,
-                energies,
-                results_stream=results_stream,
-                elements=elements,
-                ev_per_bin=ev_per_bin,
-                detector_material=material,
-                detector_thickness=thickness,
-            )
-            tasks.append(tg.create_task(coro))
-        # coros = [
-        #     fit_array(
-        #         source_node,
-        #         energies=energies,
-        #         results_stream=results_stream,
-        #         elements=elements,
-        #     )
-        #     for (source_node, results_stream) in xrf_datasets(run, results_run)
-        # ]
-        # tasks = [tg.create_task(coro) for coro in coros]
+    with ThreadExecutor(max_workers=max_workers) as executor:
+        async with TaskGroup() as tg:
+            loop = asyncio.get_running_loop()
+            loop.set_default_executor(executor)
+            nodes = xrf_datasets(run, results_run)
+            tasks = []
+            for source_node in nodes:
+                stream_name, array_name = source_node.path_parts[-2:]
+                stream = source_node.parent
+                config = stream.metadata["configuration"][array_name]
+                ev_per_bin = config["data"][f"{array_name}-ev_per_bin"]
+                material, thickness = detector_metadata(config, array_name)
+                results_stream = results_run.get(stream_name)
+                if results_stream is None:
+                    # We don't have a node for stream results yet, so make one
+                    results_stream = results_run.create_container(stream_name)
+                    log.info(f"Created new result stream '{results_stream.uri}'.")
+                coro = fit_array(
+                    source_node,
+                    energies,
+                    results_stream=results_stream,
+                    elements=elements,
+                    ev_per_bin=ev_per_bin,
+                    detector_material=material,
+                    detector_thickness=thickness,
+                )
+                tasks.append(tg.create_task(coro))
     results = [task.result() for task in tasks]
     return results
 
@@ -295,10 +287,20 @@ def main(args: Sequence[str] | None = None):
         "--results-profile",
         help="The name of the Tiled profile used for processed run data.",
     )
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help="How many worker threads will be processing spectra.",
+    )
     parsed = parser.parse_args(args)
     # Load the necessary Tiled catalogs
     raw_catalog = from_profile(parsed.raw_profile)
     run = raw_catalog[parsed.uid]
     results_catalog = from_profile(parsed.results_profile)
     # Do the actual exporting
-    asyncio.run(fit_fluorescence(run=run, results_catalog=results_catalog))
+    asyncio.run(
+        fit_fluorescence(
+            run=run, results_catalog=results_catalog, max_workers=parsed.max_workers
+        )
+    )

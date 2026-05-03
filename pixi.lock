@@ -208,7 +208,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/b4/36/ded8aebea91919485b7bbabbd14f5f359326cb5ec218cd67074d1e426d74/watchfiles-1.1.1-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/63/bc/d3e208028de777087e6fb2b122051a6ff7bbcca0d6df9d9c2bf1dd869ae9/websockets-16.0-cp314-cp314-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/dc/83/6d810a8a9ebc9c307989b418840c20e46907c74d707beb67ab566773e6fc/xarray-2026.4.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/38/8b/7ec325b4e9e78beefc2d025b01ee8a2fde771ef7c957c3bff99b9e1fbffa/xraydb-4.5.8-py3-none-any.whl
+      - pypi: git+https://github.com/spc-group/XrayDB.git?subdirectory=python&branch=thread-safety#5a83aee3903a168dbb54a2868c67510328711168
       - pypi: https://files.pythonhosted.org/packages/95/b9/a74eaec76cb4640db6c3d95cbfac39577bce82e25d87a38afe27fbf125ef/xraylarch-2026.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/de/7c/ba8ca8cbe9dbef8e83a95fc208fed8e6686c98b4719aaa0aa7f3d31fe390/zarr-3.1.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/dc/cc50210e11e465c975462439a492516a73300ab8caa8f5e0902544fd748b/zstandard-0.25.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
@@ -466,7 +466,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/68/5a/199c59e0a824a3db2b89c5d2dade7ab5f9624dbf6448dc291b46d5ec94d3/wcwidth-0.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/63/bc/d3e208028de777087e6fb2b122051a6ff7bbcca0d6df9d9c2bf1dd869ae9/websockets-16.0-cp314-cp314-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/dc/83/6d810a8a9ebc9c307989b418840c20e46907c74d707beb67ab566773e6fc/xarray-2026.4.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/38/8b/7ec325b4e9e78beefc2d025b01ee8a2fde771ef7c957c3bff99b9e1fbffa/xraydb-4.5.8-py3-none-any.whl
+      - pypi: git+https://github.com/spc-group/XrayDB.git?subdirectory=python&branch=thread-safety#5a83aee3903a168dbb54a2868c67510328711168
       - pypi: https://files.pythonhosted.org/packages/95/b9/a74eaec76cb4640db6c3d95cbfac39577bce82e25d87a38afe27fbf125ef/xraylarch-2026.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/de/7c/ba8ca8cbe9dbef8e83a95fc208fed8e6686c98b4719aaa0aa7f3d31fe390/zarr-3.1.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/dc/cc50210e11e465c975462439a492516a73300ab8caa8f5e0902544fd748b/zstandard-0.25.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
@@ -2287,8 +2287,8 @@ packages:
 - pypi: ./
   name: oaty-bar
   version: 0.1.0
-  sha256: d4c4cbf73fabcb5b55ff33dabdc1fff65562e950502ad22dc932d8544029f763
-  requires_python: '>=3.11'
+  sha256: 9211d6211ef0384728f3ad1c79d0eb55f37ad8c8559b2a6d16b423497b5774b2
+  requires_python: '>=3.14'
   editable: true
 - pypi: https://files.pythonhosted.org/packages/86/f0/49f6b02dab9c05e3fd79d6129e4d9e7e9874d6e5e05369ca3b3b80a48aaa/obstore-0.9.4-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
   name: obstore
@@ -4230,23 +4230,23 @@ packages:
   - types-setuptools ; extra == 'types'
   - types-xlrd ; extra == 'types'
   requires_python: '>=3.11'
-- pypi: https://files.pythonhosted.org/packages/38/8b/7ec325b4e9e78beefc2d025b01ee8a2fde771ef7c957c3bff99b9e1fbffa/xraydb-4.5.8-py3-none-any.whl
+- pypi: git+https://github.com/spc-group/XrayDB.git?subdirectory=python&branch=thread-safety#5a83aee3903a168dbb54a2868c67510328711168
   name: xraydb
   version: 4.5.8
-  sha256: 2215baafa6a03d00d0254a94525aafc6493c8c285e4ac4477fbd6271b25e6a51
   requires_dist:
-  - numpy>=1.19
-  - scipy>=1.6
+  - numpy>=2
+  - scipy>=1.13
   - sqlalchemy>=2.0.1
   - platformdirs
   - build ; extra == 'dev'
   - twine ; extra == 'dev'
   - sphinx ; extra == 'doc'
   - pytest ; extra == 'test'
+  - pytest-asyncio ; extra == 'test'
   - pytest-cov ; extra == 'test'
   - coverage ; extra == 'test'
   - xraydb[dev,doc,test] ; extra == 'all'
-  requires_python: '>=3.9'
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/95/b9/a74eaec76cb4640db6c3d95cbfac39577bce82e25d87a38afe27fbf125ef/xraylarch-2026.1.2-py3-none-any.whl
   name: xraylarch
   version: 2026.1.2

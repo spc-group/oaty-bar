@@ -260,7 +260,7 @@ def write_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
                 )
             try:
                 times = internal[f"ts_{col_name}"].values
-            except (KeyError, TypeError):
+            except KeyError, TypeError:
                 log.error(
                     f"Could not find timestamps for internal dataset '{col_name}'"
                 )
@@ -286,7 +286,7 @@ def write_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
             nxfield(data_group, "value", arr)
             try:
                 times = node[f"ts_{col_name}"].read()
-            except (KeyError, TypeError):
+            except KeyError, TypeError:
                 log.debug(
                     f"Could not find timestamps for external dataset '{col_name}'"
                 )

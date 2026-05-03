@@ -1,3 +1,4 @@
+import time
 import warnings
 
 import chemformula
@@ -71,11 +72,12 @@ async def test_writes_result_container(
     xrf_catalog, results_catalog, ignore_larch_warnings
 ):
     run = xrf_catalog["xrf_run"]
-    await fit_fluorescence(run=run, results_catalog=results_catalog)
+    t0 = time.perf_counter()
+    await fit_fluorescence(run=run, results_catalog=results_catalog, max_workers=1)
+    t1 = time.perf_counter()
     assert len(results_catalog.keys()) == 1
     result = results_catalog.values().first()
     assert result.metadata["run_uid"] == "12345"
-    print(list(result.keys()))
     result_keys = list(result["primary"].keys())
     assert "ge_2element-Cr" in result_keys
     assert "ge_2element-O" in result_keys
