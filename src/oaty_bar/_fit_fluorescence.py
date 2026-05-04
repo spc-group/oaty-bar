@@ -236,11 +236,20 @@ async def fit_fluorescence(
     run: Container, results_catalog: Container, max_workers=None
 ):
     tasks: list[asyncio.Task] = []
+    # We need a baseline energy to use for non-energy-scanning streams
+    energy_signal = run.metadata.get("start", {}).get(
+        "energy_signal", "monochromator-energy"
+    )
+    if "baseline" in run.keys() and energy_signal in run["baseline"].keys():
+        baseline_energy = np.mean(run["baseline"][energy_signal].read())
+    else:
+        log.info(
+            f"Could not read baseline energy '{energy_signal}' for run '{run.uri}'."
+        )
+        baseline_energy = None
     # Fit the whole array concurrently
-    energies = run["primary/monochromator-energy"].read()
     results_run = _results_container(run, results_catalog)
     elements = parse_chemical_formula(run.metadata["start"]["chemical_formula"])
-
     with ThreadExecutor(max_workers=max_workers) as executor:
         async with TaskGroup() as tg:
             loop = asyncio.get_running_loop()
@@ -254,6 +263,14 @@ async def fit_fluorescence(
                 ev_per_bin = config["data"][f"{array_name}-ev_per_bin"]
                 material, thickness = detector_metadata(config, array_name)
                 results_stream = results_run.get(stream_name)
+                baseline_energies = np.full(
+                    shape=source_node.shape[:1], fill_value=baseline_energy
+                )
+                energies = (
+                    stream[energy_signal].read()
+                    if energy_signal in stream.keys()
+                    else baseline_energies
+                )
                 if results_stream is None:
                     # We don't have a node for stream results yet, so make one
                     results_stream = results_run.create_container(stream_name)

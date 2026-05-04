@@ -16,7 +16,7 @@ from oaty_bar._fit_fluorescence import (
     xrf_model,
 )
 
-from .tiled_trees import data_dir, xrf_tree
+from .tiled_trees import data_dir, xrf_line_tree, xrf_xafs_tree
 
 
 @pytest.fixture
@@ -39,7 +39,12 @@ def ignore_larch_warnings():
 
 @pytest.fixture(scope="module")
 def xrf_catalog():
-    tree = MapAdapter({"xrf_run": xrf_tree})
+    tree = MapAdapter(
+        {
+            "xafs_run": xrf_xafs_tree,
+            "line_run": xrf_line_tree,
+        }
+    )
     with Context.from_app(build_app(tree)) as context:
         client = from_context(context)
         yield client
@@ -71,7 +76,7 @@ def results_catalog(tmp_path):
 async def test_writes_result_container(
     xrf_catalog, results_catalog, ignore_larch_warnings
 ):
-    run = xrf_catalog["xrf_run"]
+    run = xrf_catalog["xafs_run"]
     t0 = time.perf_counter()
     await fit_fluorescence(run=run, results_catalog=results_catalog, max_workers=1)
     t1 = time.perf_counter()
@@ -90,11 +95,20 @@ async def test_writes_result_container(
 
 @pytest.mark.asyncio
 async def test_setup_xrf_model(xrf_catalog, results_catalog, ignore_larch_warnings):
-    run = xrf_catalog["xrf_run"]
+    run = xrf_catalog["xafs_run"]
     results = await fit_fluorescence(run=run, results_catalog=results_catalog)
     model = results[0][0].model
     assert model.detector.material == "Ge"
     assert model.detector.thickness == pytest.approx(0.6)
+
+
+@pytest.mark.asyncio
+async def test_baseline_energy(xrf_catalog, results_catalog, ignore_larch_warnings):
+    """Can the XRF model get the x-ray energy from baseline metadata."""
+    run = xrf_catalog["line_run"]
+    results = await fit_fluorescence(run=run, results_catalog=results_catalog)
+    model = results[0][0].model
+    assert model.xray_energy == 9.001
 
 
 test_datasets = [

@@ -317,7 +317,7 @@ xafs_tree = MapAdapter(
 
 
 # Reference 4219b3e8-97ba-434c-b564-95b9d0fc921b
-xrf_tree = MapAdapter(
+xrf_xafs_tree = MapAdapter(
     {
         "primary": MapAdapter(
             {
@@ -348,6 +348,51 @@ xrf_tree = MapAdapter(
         ),
     },
     metadata={"start": {"uid": "12345", "chemical_formula": "Cr3O4"}},
+)
+
+
+xrf_line_tree = MapAdapter(
+    {
+        "primary": MapAdapter(
+            {
+                # Add energies for points 1-3: [6911. , 6915.8, 6921.]
+                "ge_2element": ArrayAdapter.from_array(
+                    np.load(data_dir / "xrf_spectra.npy")
+                ),
+                "aerotech_horiz": ArrayAdapter.from_array([-100, 0, 100]),
+            },
+            metadata={
+                "configuration": {
+                    "ge_2element": {
+                        "data": {
+                            "ge_2element-ev_per_bin": 10,
+                            "ge_2element-sensor_material": "Ge",
+                            "ge_2element-sensor_thickness": 6.0,
+                        },
+                        "data_keys": {
+                            "ge_2element-sensor_thickness": {
+                                "units": "mm",
+                            }
+                        },
+                    },
+                },
+            },
+        ),
+        "baseline": MapAdapter(
+            {
+                # Add energies for points 1-3: [6911. , 6915.8, 6921.]
+                "secondary-mono-energy": ArrayAdapter.from_array([9000, 9002]),
+            },
+            metadata={},
+        ),
+    },
+    metadata={
+        "start": {
+            "uid": "12345",
+            "chemical_formula": "Cr3O4",
+            "energy_signal": "secondary-mono-energy",
+        }
+    },
 )
 
 
