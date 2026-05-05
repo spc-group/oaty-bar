@@ -7,11 +7,11 @@
             "command" : "/bin/date +%Y%m%d%H%M%S",
             "outputVariableRegexList" : ["(?P<timeStamp>.*)"]
         },
-	"020-FIT_FLUORESCENCE" : {
-	    "command": "/APSshare/bin/pixi run --manifest-path ~/src/oaty-bar fit-fluorescence $uid",
-	},
+        "020-FIT_FLUORESCENCE" : {
+            "command": "/APSshare/bin/pixi run --manifest-path ~/src/oaty-bar fit-fluorescence $run_uid",
+        },
         "030-EXPORT": {
-            "command" : "/APSshare/bin/pixi run --manifest-path ~/src/oaty-bar export-hdf $uid $target_folder"
+            "command" : "/APSshare/bin/pixi run --manifest-path ~/src/oaty-bar export-hdf $run_uid $target_folder"
         },
         "040-DONE"   : {
             "command" : "/bin/echo 'STOP JOB ID: $id' >> /tmp/workflow.$timeStamp/$id.out"
