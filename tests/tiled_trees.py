@@ -3,11 +3,13 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 from tiled.adapters.array import ArrayAdapter
 from tiled.adapters.mapping import MapAdapter
-from tiled.adapters.table import TableAdapter
+from tiled.adapters.xarray import DatasetAdapter, _DatasetMap
 from tiled.client import Context, from_context
 from tiled.server.app import build_app
+from tiled.structures.core import Spec
 
 data_dir = Path(__file__).parent / "data"
 
@@ -88,7 +90,7 @@ xafs_run_metadata = {
 }
 
 
-xafs_events = pd.DataFrame(
+xafs_primary = xr.Dataset(
     {
         "energy": np.linspace(8300, 8400, num=100),
         "energy-id-energy-readback": np.linspace(8.32, 8.42, num=100),
@@ -98,17 +100,21 @@ xafs_events = pd.DataFrame(
         "ts_It-net_current": np.linspace(0, 15, num=100),
         "I0-net_current": np.linspace(1, 2, num=100),
         "ts_I0-net_current": np.linspace(0, 15, num=100),
+        "ge_8element": (["frame", "element", "bin"], np.ones(shape=(100, 8, 1024))),
+        "ge_8element-element0-all_event": np.ones(shape=(100,)),
     }
 )
 
-xafs_baseline = {
-    "aps_current": ArrayAdapter.from_array(np.asarray([130.0, 204.1])),
-    "aps_fill_number": ArrayAdapter.from_array(np.asarray([1, 2])),
-    "aps_global_feedback": ArrayAdapter.from_array(np.asarray([True, False])),
-    "ts_aps_current": ArrayAdapter.from_array(np.asarray([10, 25])),
-    "ts_aps_fill_number": ArrayAdapter.from_array(np.asarray([10, 25])),
-    "ts_aps_global_feedback": ArrayAdapter.from_array(np.asarray([10, 25])),
-}
+xafs_baseline = xr.Dataset(
+    {
+        "aps_current": np.asarray([130.0, 204.1]),
+        "aps_fill_number": np.asarray([1, 2]),
+        "aps_global_feedback": np.asarray([True, False]),
+        "ts_aps_current": np.asarray([10, 25]),
+        "ts_aps_fill_number": np.asarray([10, 25]),
+        "ts_aps_global_feedback": np.asarray([10, 25]),
+    }
+)
 
 
 xafs_config = {
@@ -291,28 +297,28 @@ hints = {
 
 xafs_tree = MapAdapter(
     {
-        "primary": MapAdapter(
-            {
-                "internal": TableAdapter.from_pandas(xafs_events),
-                "ge_8element": ArrayAdapter.from_array(np.ones(shape=(100, 8, 1024))),
-                "ge_8element-element0-all_event": ArrayAdapter.from_array(
-                    np.ones(shape=(100,))
-                ),
-            },
+        "primary": DatasetAdapter(
+            _DatasetMap(xafs_primary),
             metadata={
+                "attrs": xafs_primary.attrs,
                 "hints": hints,
                 "data_keys": data_keys,
                 "configuration": xafs_config,
             },
+            specs=[Spec("BlueskyEventStream", version="3.0"), Spec("xarray_dataset")],
+            # Spec('BlueskyEventStream', version='3.0')
         ),
-        "baseline": MapAdapter(
-            xafs_baseline,
+        "baseline": DatasetAdapter(
+            _DatasetMap(xafs_baseline),
             metadata={
+                "attrs": xafs_primary.attrs,
                 "data_keys": baseline_data_keys,
             },
+            specs=[Spec("BlueskyEventStream", version="3.0"), Spec("xarray_dataset")],
         ),
     },
     metadata=xafs_run_metadata,
+    specs=[Spec("BlueskyRun", version="3.0")],
 )
 
 

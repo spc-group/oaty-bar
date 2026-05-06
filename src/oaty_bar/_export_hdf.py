@@ -1,9 +1,9 @@
 import argparse
+import asyncio
 import datetime as dt
 import json
 import logging
 import re
-import warnings
 from collections.abc import Mapping, Sequence
 from io import BytesIO
 from pathlib import Path
@@ -13,13 +13,20 @@ import h5py
 import numpy as np
 from tiled.client import from_profile
 from tiled.client.container import Container
+from tiled.client.dataframe import DataFrameClient
+from tiled.queries import Eq
 from tiled.server.schemas import DataSource
 from tiled.utils import SerializationError
 
 log = logging.getLogger("oaty-bar")
 
 
-def nxgroup(parent: h5py.Group, name: str, nx_class: str | None = None) -> h5py.Group:
+def nxgroup(
+    parent: h5py.Group, name: str, nx_class: str | None = None, exist_ok: bool = False
+) -> h5py.Group:
+    if name in parent and exist_ok:
+        return parent[name]
+    # Need to create a new group
     group = parent.create_group(name)
     if nx_class is not None:
         group.attrs["NX_class"] = nx_class
@@ -38,8 +45,8 @@ def nxinstrument(parent: h5py.Group, name: str) -> h5py.Group:
     return nxgroup(parent=parent, name=name, nx_class="NXinstrument")
 
 
-def nxnote(parent: h5py.Group, name: str) -> h5py.Group:
-    return nxgroup(parent=parent, name=name, nx_class="NXnote")
+def nxnote(parent: h5py.Group, name: str, exist_ok: bool = False) -> h5py.Group:
+    return nxgroup(parent=parent, name=name, nx_class="NXnote", exist_ok=exist_ok)
 
 
 def nxfield(parent: h5py.Group, name: str, value) -> h5py.Dataset:
@@ -79,7 +86,7 @@ def nxexternallink(
     parent[name] = link
 
 
-def write_run(
+async def write_run(
     nxfile: h5py.File,
     run: Container,
 ):
@@ -103,13 +110,51 @@ def write_run(
         streams = run["streams"]
     else:
         streams = run
-    for stream_name, stream_node in streams.items():
-        write_stream(
-            name=stream_name,
-            node=stream_node,
-            entry=entry,
-        )
+    async with asyncio.TaskGroup() as tg:
+        coros = [
+            write_event_stream(name=stream_name, node=stream_node, entry=entry)
+            for stream_name, stream_node in streams.items()
+        ]
+        tasks = [tg.create_task(coro) for coro in coros]
     # Write attributes
+    return entry
+
+
+async def write_results(
+    entry: h5py.Group,
+    run: Container,
+):
+    """Write a run of results to the HDF file as a nexus-compatiable
+    entry.
+
+    Similar to `write_run()` except expects the basic structure to already exist.
+
+    Parameters
+    ==========
+    entry
+      The base NXEntry HDF5 group to which we should write.
+    run
+      The Tiled container with the results to write.
+
+    """
+    tasks = []
+    writers = {
+        DataFrameClient: write_table,
+    }
+    results_group = nxnote(entry, "results", exist_ok=True)
+    async with asyncio.TaskGroup() as tg:
+        for node_name, node in list(run.items()):
+            # Different node structures need to be written differently
+            write = writers[type(node)]
+            tasks.append(
+                tg.create_task(
+                    write(
+                        name=node_name,
+                        node=node,
+                        parent_group=results_group,
+                    )
+                )
+            )
     return entry
 
 
@@ -189,7 +234,7 @@ def insert_data_source(parent: h5py.Group, source: DataSource):
         "value",
         shape=source.structure["shape"],
         dtype=dtype,
-        compression="szip",
+        compression="gzip",
     )
     # Open and copy data from source files
     source_path = source.parameters["dataset"]
@@ -210,7 +255,48 @@ def insert_data_source(parent: h5py.Group, source: DataSource):
         start = stop
 
 
-def write_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
+async def write_data_key(
+    col_name: str,
+    data_key: Mapping[str, Any],
+    stream_node: Container,
+    stream_group: h5py.Group,
+) -> h5py.Group:
+    """Load the data from the API and write it to an HDF5 group."""
+    data_group = nxdata(stream_group, col_name)
+    loop = asyncio.get_running_loop()
+    if len(data_key.get("shape", [])) < 3:
+        # Simple array, easier to load all at once
+        xarr = await loop.run_in_executor(
+            None, stream_node.read, [col_name, f"ts_{col_name}"]
+        )
+        nxfield(data_group, "value", xarr[col_name])
+        timestamps = xarr.get(f"ts_{col_name}")
+        if timestamps is not None:
+            nxfield(data_group, "EPOCH", timestamps)
+            nxfield(data_group, "time", timestamps - np.min(timestamps))
+            data_group["time"].attrs["units"] = "s"
+            data_group.attrs["axes"] = "time"
+    else:
+        # Area detector array, so load in parallel
+        pass
+    log.info(f"Could not find timestamps for dataset '{col_name}'")
+
+    # Extra parameters
+    data_group.attrs["signal"] = "value"
+    if "units" in data_key.keys():
+        data_group["value"].attrs["units"] = data_key["units"]
+
+
+async def write_table(name: str, node, parent_group: h5py.Group) -> h5py.Group:
+    """Write a Tiled table to the HDF file."""
+    table_group = nxnote(parent_group, name)
+    df = await asyncio.to_thread(node.read)
+    for series_name, series in df.items():
+        data_group = nxdata(table_group, series_name)
+        nxfield(data_group, "value", series.values)
+
+
+async def write_event_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
     """Write a stream to the HDF file as a nexus-compatiable entry.
 
     *node* should be the container for this stream. E.g.
@@ -235,69 +321,79 @@ def write_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
 
     """
     metadata = node.metadata
-    stream_group = nxnote(entry["instrument/bluesky/streams"], name)
+    stream_group = nxnote(entry["instrument/bluesky/streams"], name, exist_ok=False)
     # Make sure we have access to these data
-    try:
-        internal = node["internal"].read()
-    except KeyError:
-        # We don't have an internal dataset for some reason
-        internal = None
-    for col_name, desc in metadata["data_keys"].items():
-        data_group = nxdata(stream_group, col_name)
-        is_internal = internal is not None and col_name in internal
-        # Check for pathologies
-        if not is_internal and col_name not in node:
-            warnings.warn(f"'{col_name}' in {node.uri} has a data key but no array.")
-            continue
-        # Write the dataset
-        if is_internal:
-            # Save internal dataset
-            try:
-                nxfield(data_group, "value", internal[col_name].values)
-            except KeyError:
-                raise SerializationError(
-                    f"Could not find internal dataset '{col_name}'"
-                )
-            try:
-                times = internal[f"ts_{col_name}"].values
-            except KeyError, TypeError:
-                log.error(
-                    f"Could not find timestamps for internal dataset '{col_name}'"
-                )
-            else:
-                nxfield(data_group, "EPOCH", times)
-                data_group["time"] = times - np.min(times)
-                data_group["time"].attrs["units"] = "s"
-                data_group.attrs["axes"] = "time"
-        elif (sources := node[col_name].data_sources()) is not None:
-            # Load array data from files on disk
-            if len(sources) < 1:
-                continue
-            if len(sources) > 1:
-                raise ValueError(
-                    "Exporter cannot yet export multi-source data. "
-                    "Please submit an issue describing the use case."
-                )
-            (source,) = sources
-            insert_data_source(data_group, source)
-        else:
-            # Most likely an external dataset
-            arr = node[col_name].read()
-            nxfield(data_group, "value", arr)
-            try:
-                times = node[f"ts_{col_name}"].read()
-            except KeyError, TypeError:
-                log.debug(
-                    f"Could not find timestamps for external dataset '{col_name}'"
-                )
-            else:
-                nxfield(data_group, "EPOCH", times)
-                data_group["time"] = times - np.min(times)
-                data_group["time"].attrs["units"] = "s"
-                data_group.attrs["axes"] = "time"
-        data_group.attrs["signal"] = "value"
-        if "units" in desc.keys():
-            data_group["value"].attrs["units"] = desc["units"]
+    # try:
+    #     internal = node["internal"].read()
+    # except KeyError:
+    #     # We don't have an internal dataset for some reason
+    #     internal = None
+    # Write all the children to disk concurrently
+    data_keys = metadata["data_keys"]
+    async with asyncio.TaskGroup() as tg:
+        coros = [
+            write_data_key(
+                col_name, data_key, stream_node=node, stream_group=stream_group
+            )
+            for col_name, data_key in data_keys.items()
+        ]
+        tasks = [tg.create_task(coro) for coro in coros]
+    # for col_name, desc in metadata["data_keys"].items():
+    #     data_group = nxdata(stream_group, col_name)
+    #     is_internal = internal is not None and col_name in internal
+    #     # Check for pathologies
+    #     if not is_internal and col_name not in node:
+    #         warnings.warn(f"'{col_name}' in {node.uri} has a data key but no array.")
+    #         continue
+    #     # Write the dataset
+    #     if is_internal:
+    #         # Save internal dataset
+    #         try:
+    #             nxfield(data_group, "value", internal[col_name].values)
+    #         except KeyError:
+    #             raise SerializationError(
+    #                 f"Could not find internal dataset '{col_name}'"
+    #             )
+    #         try:
+    #             times = internal[f"ts_{col_name}"].values
+    #         except KeyError, TypeError:
+    #             log.error(
+    #                 f"Could not find timestamps for internal dataset '{col_name}'"
+    #             )
+    #         else:
+    #             nxfield(data_group, "EPOCH", times)
+    #             data_group["time"] = times - np.min(times)
+    #             data_group["time"].attrs["units"] = "s"
+    #             data_group.attrs["axes"] = "time"
+    #     elif True:
+    #         # Load array data from files on disk
+    #         if len(sources) < 1:
+    #             continue
+    #         if len(sources) > 1:
+    #             raise ValueError(
+    #                 "Exporter cannot yet export multi-source data. "
+    #                 "Please submit an issue describing the use case."
+    #             )
+    #         (source,) = sources
+    #         insert_data_source(data_group, source)
+    #     else:
+    #         # Most likely an external dataset
+    #         arr = node[col_name].read()
+    #         nxfield(data_group, "value", arr)
+    #         try:
+    #             times = node[f"ts_{col_name}"].read()
+    #         except KeyError, TypeError:
+    #             log.debug(
+    #                 f"Could not find timestamps for external dataset '{col_name}'"
+    #             )
+    #         else:
+    #             nxfield(data_group, "EPOCH", times)
+    #             data_group["time"] = times - np.min(times)
+    #             data_group["time"].attrs["units"] = "s"
+    #             data_group.attrs["axes"] = "time"
+    #     data_group.attrs["signal"] = "value"
+    #     if "units" in desc.keys():
+    #         data_group["value"].attrs["units"] = desc["units"]
 
     # Add links to the main NXdata group
     if name == "baseline":
@@ -322,7 +418,9 @@ def write_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
     return stream_group
 
 
-def serialize_hdf(buff: IO[bytes] | Path, run: Container):
+async def serialize_hdf(
+    buff: IO[bytes] | Path, run: Container, results_runs: Container | None = None
+):
     """Encode a bluesky run into an HDF5 file with NeXus annotations.
 
     Follows the NeXuS XAS spectroscopy definition.
@@ -332,7 +430,12 @@ def serialize_hdf(buff: IO[bytes] | Path, run: Container):
         buff.seek(0)
     with h5py.File(buff, mode="w") as nxfile:
         # Write data entry to the nexus file
-        write_run(nxfile=nxfile, run=run)
+        entry = await write_run(nxfile=nxfile, run=run)
+        # Write the results after the initial raw data have been written
+        results = results_runs.values() if results_runs is not None else []
+        coros = [write_results(entry=entry, run=run) for run in results]
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(coro) for coro in coros]
 
 
 def build_file_name(metadata: Mapping[str, Any]) -> str:
@@ -357,11 +460,18 @@ def build_file_name(metadata: Mapping[str, Any]) -> str:
     return f"{base_name}.h5"
 
 
-def export_hdf(uid: str, target_dir: Path, *, raw_profile: str, processed_profile: str):
+def export_hdf(
+    uid: str, target_dir: Path, *, raw_profile: str, results_profile: str | None = None
+):
     raw_catalog = from_profile(raw_profile)
     run = raw_catalog[uid]
+    if results_profile is not None:
+        results_catalog = from_profile(results_profile)
+        results_runs = results_catalog.search(Eq("run_uid", uid))
+    else:
+        results_runs = None
     target_file = target_dir / build_file_name(run.metadata)
-    serialize_hdf(buff=target_file, run=run)
+    asyncio.run(serialize_hdf(buff=target_file, run=run, results_runs=results_runs))
 
 
 def main(args: Sequence[str] | None = None):
@@ -379,8 +489,8 @@ def main(args: Sequence[str] | None = None):
         "--raw-profile", help="The name of the Tiled profile used for raw runs."
     )
     parser.add_argument(
-        "--processed-profile",
-        help="The name of the Tiled profile used for processed run data.",
+        "--results-profile",
+        help="The name of the Tiled profile used for processed run reuslts data.",
     )
     parsed = parser.parse_args(args)
     # Do the actual exporting
@@ -388,5 +498,5 @@ def main(args: Sequence[str] | None = None):
         uid=parsed.uid,
         target_dir=Path(parsed.target_dir),
         raw_profile=parsed.raw_profile,
-        processed_profile=parsed.processed_profile,
+        results_profile=parsed.results_profile,
     )

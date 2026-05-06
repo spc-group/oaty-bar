@@ -5,6 +5,7 @@ from unittest import mock
 
 import h5py
 import numpy as np
+import pandas as pd
 import pytest
 import pytest_asyncio
 from nexusformat.nexus import NXFile
@@ -13,7 +14,7 @@ from oaty_bar._export_hdf import (
     main,
     nxexternallink,
     serialize_hdf,
-    write_stream,
+    write_event_stream,
 )
 
 from .tiled_trees import build_tree
@@ -150,6 +151,18 @@ def xafs_run():
         yield run
 
 
+@pytest.fixture()
+def results_catalog(results_catalog):
+    run = results_catalog.create_container(
+        "blahblah", metadata={"run_uid": "7d1daf1d-60c7-4aa7-a668-d1cd97e5335f"}
+    )
+    stream = run.write_table(
+        pd.DataFrame({"Ni": [1, 2, 3, 4]}),
+        key="ge_8element_fit",
+    )
+    return results_catalog
+
+
 class NexusIO(NXFile):
     def __init__(self, bytesio: IO[bytes], mode: str = "r", **kwargs):
         self.h5 = h5py
@@ -185,7 +198,7 @@ class NexusIO(NXFile):
 async def nxfile(xafs_run):
     # Generate the headers
     buff = io.BytesIO()
-    serialize_hdf(buff, xafs_run)
+    await serialize_hdf(buff, xafs_run)
     with NexusIO(buff, mode="r") as fd:
         # Write data entry to the nexus file
         yield fd
@@ -208,14 +221,15 @@ def test_file_structure(nxfile):
     assert entry.attrs["NX_class"] == "NXentry"
 
 
-def test_missing_hints(xafs_run):
+@pytest.mark.asyncio
+async def test_missing_hints(xafs_run):
     """Make sure the stream still writes if there are not hints."""
     node = mock.AsyncMock()
     node.metadata = {
         "data_keys": {},
         "hints": {"I0": {}},
     }
-    write_stream(
+    await write_event_stream(
         name="primary",
         node=node,
         entry=mock.MagicMock(),
@@ -265,10 +279,24 @@ def test_export_hdf(tmp_path, xafs_run, mocker):
             str(tmp_path),
             "--raw-profile",
             "raw_catalog",
-            "--processed-profile",
-            "proc_catalog",
+            # "--results-profile",
+            # "proc_catalog",
         ]
     )
     # Check that the file was created
     target_file = tmp_path / "202210060914-NMC-811-Pristine-rel_scan-7d1daf1d.h5"
     assert target_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_export_results(xafs_run, results_catalog, mocker):
+    buff = io.BytesIO()
+    await serialize_hdf(buff, xafs_run, results_runs=results_catalog)
+    with h5py.File(buff, mode="r") as fd:
+        # Check that all datasets are in the 'results' group
+        results = fd["7d1daf1d-60c7-4aa7-a668-d1cd97e5335f/results"]
+        assert "ge_8element_fit" in results.keys()
+        assert "Ni" in results["ge_8element_fit"].keys()
+        # Check that a link is created in the 'data' group
+        # data = fd["7d1daf1d-60c7-4aa7-a668-d1cd97e5335f/data"]
+        # assert "ge_8element-Ni" in data.keys()
