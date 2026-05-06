@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor as ThreadExecutor
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
 from chemformula import ChemFormula
 from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
@@ -154,7 +155,7 @@ async def fit_frame(
 async def fit_array(
     node: ArrayClient,
     energies,
-    results_stream: Container,
+    results_node: Container,
     elements: Mapping[str, int | float],
     ev_per_bin: int | float,
     detector_material: str,
@@ -209,8 +210,8 @@ async def fit_array(
         [result.goodness for result in results], op=np.mean
     )
     # Write these are separate arrays, maybe this could be a table in the future?
-    for signal_name, arr in new_signals.items():
-        results_stream.write_array(arr, key=f"{detector_name}-{signal_name}")
+    df = pd.DataFrame(new_signals)
+    results_node.write_table(df, key=f"{detector_name}-fit")
     return results
 
 
@@ -262,7 +263,6 @@ async def fit_fluorescence(
                 config = stream.metadata["configuration"][array_name]
                 ev_per_bin = config["data"][f"{array_name}-ev_per_bin"]
                 material, thickness = detector_metadata(config, array_name)
-                results_stream = results_run.get(stream_name)
                 baseline_energies = np.full(
                     shape=source_node.shape[:1], fill_value=baseline_energy
                 )
@@ -271,14 +271,10 @@ async def fit_fluorescence(
                     if energy_signal in stream.keys()
                     else baseline_energies
                 )
-                if results_stream is None:
-                    # We don't have a node for stream results yet, so make one
-                    results_stream = results_run.create_container(stream_name)
-                    log.info(f"Created new result stream '{results_stream.uri}'.")
                 coro = fit_array(
                     source_node,
                     energies,
-                    results_stream=results_stream,
+                    results_node=results_run,
                     elements=elements,
                     ev_per_bin=ev_per_bin,
                     detector_material=material,

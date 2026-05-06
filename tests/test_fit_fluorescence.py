@@ -61,14 +61,14 @@ async def test_writes_result_container(
     assert len(results_catalog.keys()) == 1
     result = results_catalog.values().first()
     assert result.metadata["run_uid"] == "12345"
-    result_keys = list(result["primary"].keys())
-    assert "ge_2element-Cr" in result_keys
-    assert "ge_2element-O" in result_keys
-    assert "ge_2element-Ar" in result_keys
-    assert "ge_2element-elastic" in result_keys
-    assert "ge_2element-background" in result_keys
-    assert "ge_2element-pileup" in result_keys
-    assert "ge_2element-χ²" in result_keys
+    result_table = result["ge_2element-fit"].read()
+    assert "Cr" in result_table
+    assert "O" in result_table
+    assert "Ar" in result_table
+    assert "elastic" in result_table
+    assert "background" in result_table
+    assert "pileup" in result_table
+    assert "χ²" in result_table
 
 
 @pytest.mark.asyncio
