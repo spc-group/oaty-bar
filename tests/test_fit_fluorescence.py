@@ -16,7 +16,7 @@ from oaty_bar._fit_fluorescence import (
     xrf_model,
 )
 
-from .tiled_trees import data_dir, xrf_line_tree, xrf_xafs_tree
+from .tiled_trees import data_dir, xrf_line_tree, xrf_xafs_tree, xrf_xafs_tree_no_metadata
 
 
 @pytest.fixture
@@ -42,6 +42,7 @@ def xrf_catalog():
     tree = MapAdapter(
         {
             "xafs_run": xrf_xafs_tree,
+            "xafs_run_no_metadata": xrf_xafs_tree_no_metadata,
             "line_run": xrf_line_tree,
         }
     )
@@ -81,6 +82,14 @@ async def test_setup_xrf_model(xrf_catalog, results_catalog, ignore_larch_warnin
 
 
 @pytest.mark.asyncio
+async def test_missing_metadata(xrf_catalog, results_catalog, ignore_larch_warnings):
+    """Make sure the procedure is robust against incomplete metadata."""
+    run = xrf_catalog["xafs_run_no_metadata"]
+    # Just needs to run, no results expected
+    results = await fit_fluorescence(run=run, results_catalog=results_catalog)
+
+
+@pytest.mark.asyncio
 async def test_baseline_energy(xrf_catalog, results_catalog, ignore_larch_warnings):
     """Can the XRF model get the x-ray energy from baseline metadata."""
     run = xrf_catalog["line_run"]
@@ -88,6 +97,17 @@ async def test_baseline_energy(xrf_catalog, results_catalog, ignore_larch_warnin
     model = results[0][0].model
     assert model.xray_energy == 9.001
 
+
+# @pytest.mark.asyncio
+# async def test_reuse_results_node(xrf_catalog, results_catalog, ignore_larch_warnings):
+#     """Make sure we don't create duplicate nodes in the results catalog."""
+#     run = xrf_catalog["xafs_run"]
+#     assert len(results_catalog) == 0
+#     results = await fit_fluorescence(run=run, results_catalog=results_catalog)
+#     assert len(results_catalog) == 1
+#     results = await fit_fluorescence(run=run, results_catalog=results_catalog)
+#     assert len(results_catalog) == 1
+    
 
 test_datasets = [
     # (data file, UID, xray_energy, χ²)

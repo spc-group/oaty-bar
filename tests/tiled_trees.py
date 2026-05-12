@@ -357,6 +357,35 @@ xrf_xafs_tree = MapAdapter(
 )
 
 
+xrf_xafs_tree_no_metadata = MapAdapter(
+    # Equivalent to xrf_xafs_tree but with minimal metadata to count as an xrf scan
+    {
+        "primary": MapAdapter(
+            {
+                # Add energies for points 1-3: [6911. , 6915.8, 6921.]
+                "ge_2element": ArrayAdapter.from_array(
+                    np.load(data_dir / "xrf_spectra.npy")
+                ),
+                "monochromator-energy": ArrayAdapter.from_array(
+                    [6911.0, 6915.8, 6921.0]
+                ),
+            },
+            metadata={
+                "configuration": {
+                    "ge_2element": {
+                        "data": {
+                            "ge_2element-ev_per_bin": 10,
+                        },
+                        "data_keys": {},
+                    },
+                },
+            },
+        ),
+    },
+    metadata={"start": {"uid": "12345"}},
+)
+
+
 xrf_line_tree = MapAdapter(
     {
         "primary": MapAdapter(

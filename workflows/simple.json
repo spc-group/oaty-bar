@@ -8,13 +8,10 @@
             "outputVariableRegexList" : ["(?P<timeStamp>.*)"]
         },
         "020-FIT_FLUORESCENCE" : {
-            "command": "/APSshare/bin/pixi run --manifest-path ~/src/oaty-bar fit-fluorescence $run_uid",
+            "command": "/APSshare/bin/pixi run --manifest-path ~s25idcuser/src/oaty-bar fit-fluorescence $run_uid --raw-profile oaty-bar --results-profile oaty-bar-results"
         },
         "030-EXPORT": {
-            "command" : "/APSshare/bin/pixi run --manifest-path ~/src/oaty-bar export-hdf $run_uid $target_folder"
-        },
-        "040-DONE"   : {
-            "command" : "/bin/echo 'STOP JOB ID: $id' >> /tmp/workflow.$timeStamp/$id.out"
+            "command" : "/APSshare/bin/pixi run --manifest-path ~s25idcuser/src/oaty-bar export-hdf $run_uid $target_folder --raw-profile oaty-bar --results-profile oaty-bar-results"
         }
     },
     "description" : "Processing for a Bluesky scan that has no significant data processing needs"

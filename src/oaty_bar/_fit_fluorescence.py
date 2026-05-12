@@ -70,11 +70,9 @@ def xrf_model(
     return model
 
 
-def xrf_datasets(run, results_node):
+def xrf_datasets(run):
     """Iterate over the datasets in a run that contain fluorescence
     data.
-
-    Also creates result stream nodes for each run.
 
     Yields
     ======
@@ -162,6 +160,7 @@ async def fit_array(
     detector_thickness: Quantity,
 ):
     """Fit an array of spectra in an array."""
+    print("fit_array()")
     ev_per_bin = 10
     detector_name = node.path_parts[-1]
     async with TaskGroup() as tg:
@@ -250,19 +249,25 @@ async def fit_fluorescence(
         baseline_energy = None
     # Fit the whole array concurrently
     results_run = _results_container(run, results_catalog)
-    elements = parse_chemical_formula(run.metadata["start"]["chemical_formula"])
+    elements = parse_chemical_formula(run.metadata["start"].get("chemical_formula", ""))
+    if len(elements) == 0:
+        log.warning(f"Fitting 0 chemical elements for run '{run.uri}'")
     with ThreadExecutor(max_workers=max_workers) as executor:
         async with TaskGroup() as tg:
             loop = asyncio.get_running_loop()
             loop.set_default_executor(executor)
-            nodes = xrf_datasets(run, results_run)
+            nodes = xrf_datasets(run)
             tasks = []
             for source_node in nodes:
                 stream_name, array_name = source_node.path_parts[-2:]
                 stream = source_node.parent
                 config = stream.metadata["configuration"][array_name]
                 ev_per_bin = config["data"][f"{array_name}-ev_per_bin"]
-                material, thickness = detector_metadata(config, array_name)
+                try:
+                    material, thickness = detector_metadata(config, array_name)
+                except KeyError as exc:
+                    log.error(f"Missing configuration '{exc.args[0]}' for '{array_name}'")
+                    continue
                 baseline_energies = np.full(
                     shape=source_node.shape[:1], fill_value=baseline_energy
                 )
@@ -282,6 +287,10 @@ async def fit_fluorescence(
                 )
                 tasks.append(tg.create_task(coro))
     results = [task.result() for task in tasks]
+    if len(results) == 0:
+        log.warning("Fitting produced no results.")
+    else:
+        log.info("Fit {len(results)} detectors.")
     return results
 
 
