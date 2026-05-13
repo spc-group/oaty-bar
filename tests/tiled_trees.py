@@ -353,7 +353,7 @@ xrf_xafs_tree = MapAdapter(
             },
         ),
     },
-    metadata={"start": {"uid": "12345", "chemical_formula": "Cr3O4"}},
+    metadata={"start": {"uid": "12345", "sample_formula": "Cr3O4"}},
 )
 
 
@@ -424,7 +424,7 @@ xrf_line_tree = MapAdapter(
     metadata={
         "start": {
             "uid": "12345",
-            "chemical_formula": "Cr3O4",
+            "sample_formula": "Cr3O4",
             "energy_signal": "secondary-mono-energy",
         }
     },

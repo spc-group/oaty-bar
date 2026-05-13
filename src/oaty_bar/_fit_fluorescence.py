@@ -249,7 +249,7 @@ async def fit_fluorescence(
         baseline_energy = None
     # Fit the whole array concurrently
     results_run = _results_container(run, results_catalog)
-    elements = parse_chemical_formula(run.metadata["start"].get("chemical_formula", ""))
+    elements = parse_chemical_formula(run.metadata["start"].get("sample_formula", ""))
     if len(elements) == 0:
         log.warning(f"Fitting 0 chemical elements for run '{run.uri}'")
     with ThreadExecutor(max_workers=max_workers) as executor:
@@ -266,7 +266,9 @@ async def fit_fluorescence(
                 try:
                     material, thickness = detector_metadata(config, array_name)
                 except KeyError as exc:
-                    log.error(f"Missing configuration '{exc.args[0]}' for '{array_name}'")
+                    log.error(
+                        f"Missing configuration '{exc.args[0]}' for '{array_name}'"
+                    )
                     continue
                 baseline_energies = np.full(
                     shape=source_node.shape[:1], fill_value=baseline_energy

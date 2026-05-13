@@ -16,7 +16,12 @@ from oaty_bar._fit_fluorescence import (
     xrf_model,
 )
 
-from .tiled_trees import data_dir, xrf_line_tree, xrf_xafs_tree, xrf_xafs_tree_no_metadata
+from .tiled_trees import (
+    data_dir,
+    xrf_line_tree,
+    xrf_xafs_tree,
+    xrf_xafs_tree_no_metadata,
+)
 
 
 @pytest.fixture
@@ -107,7 +112,7 @@ async def test_baseline_energy(xrf_catalog, results_catalog, ignore_larch_warnin
 #     assert len(results_catalog) == 1
 #     results = await fit_fluorescence(run=run, results_catalog=results_catalog)
 #     assert len(results_catalog) == 1
-    
+
 
 test_datasets = [
     # (data file, UID, xray_energy, χ²)
