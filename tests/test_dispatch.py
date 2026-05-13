@@ -9,7 +9,7 @@ from dmax.data_storage import Experiment
 from websockets.asyncio.client import connect
 from websockets.asyncio.server import serve
 
-from oaty_bar._dispatch import dispatch_new_runs
+from oaty_bar._dispatch import dispatch_new_runs, load_dm_apis
 
 WS_HOST = "127.0.0.1"
 WS_PORT = 4832
@@ -60,7 +60,7 @@ async def test_handle_message(websocket, mocker):
         dataDirectory="/tmp",
     )
     (connection,) = server.connections
-    dispatched = asyncio.create_task(dispatch_new_runs(websocket=client, dm_api=api))
+    dispatched = asyncio.create_task(dispatch_new_runs(websocket=client, dm_apis={"255IDZ": api}))
     # First check that we don't do anything unless there's a stop document
     await connection.send(
         json.dumps(
@@ -83,7 +83,7 @@ async def test_handle_message(websocket, mocker):
                 "key": "ABC123",
                 "specs": [],
                 "metadata": {
-                    "start": {"uid": "54321", "dm_exp": "cabana-2026-C3"},
+                    "start": {"uid": "54321", "dm_exp": "cabana-2026-C3", "dm_station_name": "255IDZ"},
                     "stop": {"exit_status": "success"},
                 },
             }
@@ -93,3 +93,23 @@ async def test_handle_message(websocket, mocker):
     assert not api.submit_processing_job.assert_called_once_with(
         workflow="simple", run_uid="54321", target_folder="/tmp"
     )
+
+
+config_toml = """
+[tiled]
+websocket_uri = "ws://localhost:8020"
+
+[ data_management_stations.255IDZ ]
+username = "cleese"
+password = "secret"
+station_name = "255IDZ"
+"""
+
+
+async def test_load_dm_apis(tmp_path):
+    toml_file = tmp_path / "oaty_bar_config.toml"
+    with open(toml_file, mode='a+') as fd:
+        fd.write(config_toml)
+    with open(toml_file, mode='rb') as fd:
+        dm_apis = load_dm_apis(fd)
+    assert "255IDZ" in dm_apis
