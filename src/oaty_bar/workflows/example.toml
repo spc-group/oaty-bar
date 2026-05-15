@@ -1,0 +1,26 @@
+name = "example"
+owner = "s25idcuser"
+userAccount = "s25idcuser"
+description = "Workflow Example 01"
+version = 1
+
+[ stages.01-START ]
+command = "/bin/date +%Y%m%d%H%M%S"
+outputVariableRegexList = ["(?P<timeStamp>.*)"]
+
+[ stages.02-MKDIR ]
+command = "/bin/mkdir -p /tmp/workflow.$timeStamp"
+
+[ stages.03-ECHO ]
+command = "/bin/echo 'START JOB ID: $id' > /tmp/workflow.$timeStamp/$id.out"
+
+[ stages.04-MD5SUM ]
+command = "/bin/md5sum $filePath | cut -f1 -d' '"
+outputVariableRegexList = ["(?P<md5Sum>.*)"]
+
+[ stages.05-ECHO ]
+command = "echo 'FILE $filePath MD5 SUM: $md5Sum' >> /tmp/workflow.$timeStamp/$id.out"
+
+[ stages.06-DONE ]
+command = "/bin/echo 'STOP JOB ID: $id' >> /tmp/workflow.$timeStamp/$id.out"
+

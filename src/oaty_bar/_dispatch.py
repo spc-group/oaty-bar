@@ -1,17 +1,20 @@
-import tomllib
 import argparse
 import asyncio
 import json
 import logging
+import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Sequence
 
 import dmax
-from websockets.asyncio.client import connect, ClientConnection
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from websockets.asyncio.client import ClientConnection, connect
+
+from .workflows import load_workflow
 
 log = logging.getLogger("oaty-bar")
+
 
 class TiledConfig(BaseModel):
     websocket_uri: str
@@ -19,6 +22,7 @@ class TiledConfig(BaseModel):
 
 class DataManagementStation(BaseModel):
     """Maps directly onto ``dmax.AsyncClient()``."""
+
     username: str
     password: str
     station_name: str
@@ -39,17 +43,19 @@ def load_dm_apis(config: OatyBarConfig):
     return apis
 
 
-async def dispatch_new_runs(websocket: ClientConnection, dm_apis: Mapping[str, dmax.AsyncClient]):
+async def dispatch_new_runs(
+    websocket: ClientConnection, dm_apis: Mapping[str, dmax.AsyncClient]
+):
     remote_addr = ":".join([str(val) for val in websocket.remote_address])
     log.info(f"Listening for new runs on {remote_addr}.")
     async for msg in websocket:
         log.debug(f"Received websocket message: {msg}")
         msg = json.loads(msg)
-        if msg['type'] != "container-child-metadata-updated":
+        if msg["type"] != "container-child-metadata-updated":
             # Not a message we can process, so skip it for now
             continue
         metadata = msg.get("metadata", {})
-        uid = metadata['start'].get('uid', "<unknown UID>")
+        uid = metadata["start"].get("uid", "<unknown UID>")
         # Guards to make sure we have all the right metadata to proceed
         if "stop" not in metadata:
             # Run is not finished yet, so ignore it for now
@@ -59,24 +65,48 @@ async def dispatch_new_runs(websocket: ClientConnection, dm_apis: Mapping[str, d
             log.info(f"Run `{uid}` did not succeed, skipping workflows.")
             continue
         if "dm_exp" not in metadata["start"]:
-            log.warning(f"Run `{uid}` is missing metadata key 'dm_exp'. Skipping workflows.")
+            log.warning(
+                f"Run `{uid}` is missing metadata key 'dm_exp'. Skipping workflows."
+            )
             continue
-        if "dm_station_name" not in metadata['start']:
-            log.warning(f"Run `{uid}` is missing metadata key 'dm_station_name'. Skipping workflows.")
+        if "dm_station_name" not in metadata["start"]:
+            log.warning(
+                f"Run `{uid}` is missing metadata key 'dm_station_name'. Skipping workflows."
+            )
             continue
-        station_name = metadata['start']['dm_station_name']
+        station_name = metadata["start"]["dm_station_name"]
         if station_name not in dm_apis:
-            log.warning(f"Unknown data management station name '{station_name}'. Skipping workflows.")
+            log.warning(
+                f"Unknown data management station name '{station_name}'. Skipping workflows."
+            )
             continue
         # The data management API can tell us where the experiment should export data
         experiment_name = metadata["start"]["dm_exp"]
         dm_api = dm_apis[station_name]
         experiment = await dm_api.experiment(name=experiment_name)
         target_folder = Path(experiment.data_path)
+        # Make sure the workflow is up to date in the API
+        workflow_name = "simple"
+        workflow = load_workflow(workflow_name, username=dm_api.username)
+        existing_workflows = await dm_api.workflows()
+        existing_workflows = [
+            workflow
+            for workflow in existing_workflows
+            if workflow.name == workflow_name
+        ]
+        if len(existing_workflows) == 0:
+            log.info(f"Adding workflow {workflow_name} to station {station_name}.")
+            await dm_api.add_workflow(workflow)
+        elif getattr(existing_workflows[0], "version", 0) < getattr(
+            workflow, "version", -1
+        ):
+            log.info(
+                f"Updating workflow {workflow_name} due to new version {getattr(workflow, 'version')}."
+            )
+            await dm_api.set_workflow(name=workflow_name, workflow=workflow)
         # The specific workflow to execute depends on the goal of the run
-        workflow = "simple"
         await dm_api.submit_processing_job(
-            workflow=workflow,
+            workflow=workflow.name,
             run_uid=metadata["start"]["uid"],
             target_folder=str(target_folder),
         )
@@ -89,13 +119,17 @@ async def run_dispatcher(config_file: Path):
     and submit workflows to various data managament APIs.
 
     """
-    with open(config_file, mode='rb') as config_fd: 
+    with open(config_file, mode="rb") as config_fd:
         cfg_dict = tomllib.load(config_fd)
     config = OatyBarConfig(**cfg_dict)
     # Error out here if we can't access the DM API
     dm_apis = load_dm_apis(config)
     log.info("Checking DM API connections…")
-    coros = [coro for api in dm_apis.values() for coro in (api.workflows(), api.experiments())]
+    coros = [
+        coro
+        for api in dm_apis.values()
+        for coro in (api.workflows(), api.experiments())
+    ]
     await asyncio.gather(*coros)
     log.info("DM APIs connected successfully.")
     async with connect(config.tiled.websocket_uri) as websocket:
@@ -112,9 +146,7 @@ def main(argv: Sequence[str] | None = None):
         help="Path to a configuration TOML file describing how the dispatcher should operate.",
     )
     parser.add_argument(
-        "-d", "--debug",
-        action="store_true",
-        help="Enable debug logging."
+        "-d", "--debug", action="store_true", help="Enable debug logging."
     )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
