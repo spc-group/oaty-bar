@@ -184,7 +184,7 @@ async def fit_array(
     # from pprint import pprint
     # print(len(results))
     # pprint(results[0])
-    # pprint([p for p in results[0].params])
+    # # pprint([p for p in results[0].params])
     # import matplotlib.pyplot as plt
 
     # for result, slc in zip(results, [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]):

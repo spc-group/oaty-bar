@@ -100,7 +100,7 @@ async def test_handle_message(websocket, mocker):
     )
     await asyncio.sleep(0.01)
     assert not api.submit_processing_job.assert_called_once_with(
-        workflow="simple", run_uid="54321", target_folder="/tmp"
+        workflow="simple", run_uid="54321", target_folder="/tmp", filePath="/dev/null"
     )
 
 
