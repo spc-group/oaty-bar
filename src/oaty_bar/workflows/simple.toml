@@ -1,6 +1,6 @@
 name = "simple"
 description = "Processing for a Bluesky scan that has no significant data processing needs"
-version = 1
+version = 2
 owner = "s25idcuser"
 userAccount = "s25idcuser"
 
@@ -8,8 +8,11 @@ userAccount = "s25idcuser"
 command = "/bin/date +%Y%m%d%H%M%S"
 outputVariableRegexList = ["(?P<timeStamp>.*)"]
 
-[ stages.020-FIT_FLUORESCENCE ]
+[ stages.020-UPDATE ]
+command = "/usr/bin/git -C ~s25idcuser/src/oaty-bar pull"
+
+[ stages.030-FIT_FLUORESCENCE ]
 command = "/APSshare/bin/pixi run --manifest-path ~s25idcuser/src/oaty-bar fit-fluorescence $run_uid --raw-profile oaty-bar --results-profile oaty-bar-results"
 
-[ stages.030-EXPORT ]
+[ stages.040-EXPORT ]
 command = "/APSshare/bin/pixi run --manifest-path ~s25idcuser/src/oaty-bar export-hdf $run_uid $target_folder --raw-profile oaty-bar --results-profile oaty-bar-results"

@@ -21,10 +21,13 @@ def test_simple_workflow():
             "command": "/bin/date +%Y%m%d%H%M%S",
             "outputVariableRegexList": ["(?P<timeStamp>.*)"],
         },
-        "020-FIT_FLUORESCENCE": {
+        "020-UPDATE": {
+            "command": "/usr/bin/git -C ~s25idcuser/src/oaty-bar pull",
+        },
+        "030-FIT_FLUORESCENCE": {
             "command": "/APSshare/bin/pixi run --manifest-path ~s25idcuser/src/oaty-bar fit-fluorescence $run_uid --raw-profile oaty-bar --results-profile oaty-bar-results"
         },
-        "030-EXPORT": {
+        "040-EXPORT": {
             "command": "/APSshare/bin/pixi run --manifest-path ~s25idcuser/src/oaty-bar export-hdf $run_uid $target_folder --raw-profile oaty-bar --results-profile oaty-bar-results"
         },
     }
