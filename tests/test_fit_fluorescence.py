@@ -138,6 +138,8 @@ async def test_goodness_of_fits(
     result = await _fit_spectrum(
         spectrum,
         ev_per_bin=10,
+        acquisition_time=1,
+        deadtime_factor=1,
         model=model,
     )
     # Check the fitting accuracy
@@ -155,3 +157,17 @@ formulae = [
 @pytest.mark.parametrize("formula,parsed", formulae)
 def test_parse_chemical_formula(formula, parsed):
     assert parse_chemical_formula(formula) == parsed
+
+
+@pytest.mark.asyncio
+async def test_deadtime_correction(xrf_catalog, results_catalog, ignore_larch_warnings):
+    stream = xrf_catalog["xafs_run"]["primary"]
+    run = xrf_catalog["xafs_run"]
+    t0 = time.perf_counter()
+    results = await fit_fluorescence(
+        run=run, results_catalog=results_catalog, max_workers=1
+    )
+    raw_value = 0.148586
+    dt_factor = 1.5
+    ac_time = 2  # seconds
+    assert results[0][0].weights["Cr"] == pytest.approx(raw_value * dt_factor / ac_time)

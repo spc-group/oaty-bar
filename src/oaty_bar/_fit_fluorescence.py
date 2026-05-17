@@ -90,13 +90,20 @@ def xrf_datasets(run):
                 yield stream[name]
 
 
-async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
+async def _fit_spectrum(
+    spectrum,
+    ev_per_bin: int | float,
+    acquisition_time: float,
+    deadtime_factor: float,
+    model: XRFModel,
+):
     """Read and fit an individual spectrum from the array of spectra."""
     t0 = time.perf_counter()
     # Larch expects data packaged into `Group` objects
     mca = Group()
-    mca.counts = spectrum
-    num_bins = spectrum.shape[0]
+    counts = spectrum * deadtime_factor / acquisition_time
+    mca.counts = counts
+    num_bins = counts.shape[0]
     energy_start = ev_per_bin * 0.5
     energy_stop = ev_per_bin * (num_bins + 0.5)
     mca.energy = np.linspace(energy_start, energy_stop, num=num_bins)
@@ -104,11 +111,11 @@ async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
     # bg = xrf_background(energy=mca.energy/1000, counts=mca.counts)
     # bg = peakutils.baseline(mca.counts, deg=4)
     baseline = Baseline(x_data=mca.energy)
-    bg, bg_params = baseline.imodpoly(spectrum)
+    bg, bg_params = baseline.imodpoly(counts)
     model.add_background(bg)
     loop = asyncio.get_running_loop()
     output = await loop.run_in_executor(None, model.fit_spectrum, mca)
-    decomp = output.decompose_spectrum(spectrum)
+    decomp = output.decompose_spectrum(counts)
     result = FitResult(
         goodness=output.redchi,
         weights=decomp.weights,
@@ -117,6 +124,15 @@ async def _fit_spectrum(spectrum, ev_per_bin: int | float, model: XRFModel):
     )
     log.debug(f"Fit spectrum in {time.perf_counter()-t0:.2f} seconds")
     return result
+
+
+async def read_frame(parent: Container, name: str, slice):
+    """Read a given frame (slice) from an array."""
+    loop = asyncio.get_running_loop()
+    print(parent)
+    node = parent[name]
+    results = await loop.run_in_executor(None, node.read, slice)
+    return results
 
 
 async def fit_frame(
@@ -129,7 +145,33 @@ async def fit_frame(
     detector_thickness: Quantity,
 ):
     loop = asyncio.get_running_loop()
-    frame = await loop.run_in_executor(None, node.read, frame_num)
+    array_name = node.path_parts[-1]
+    elem_indices = list(range(node.shape[1]))
+    # Read livetime correction data along with the frame itself
+    async with TaskGroup() as tg:
+        clock_freq = 80e6
+        coros = [
+            read_frame(
+                node.parent, f"{array_name}-element{elem}-deadtime_factor", frame_num
+            )
+            for elem in elem_indices
+        ]
+        dt_tasks = [tg.create_task(coro) for coro in coros]
+        coros = [
+            read_frame(
+                node.parent, f"{array_name}-element{elem}-clock_ticks", frame_num
+            )
+            for elem in elem_indices
+        ]
+        clock_tasks = [tg.create_task(coro) for coro in coros]
+        frame_task = tg.create_task(
+            read_frame(node.parent, name=array_name, slice=frame_num)
+        )
+    frame = frame_task.result()
+    dt_factors = np.asarray([task.result() for task in dt_tasks])
+    ticks = np.asarray([task.result() for task in clock_tasks])
+    times = ticks / clock_freq
+    # Do the actual fitting here
     async with TaskGroup() as tg:
         models = [
             xrf_model(
@@ -142,8 +184,14 @@ async def fit_frame(
             for i in range(frame.shape[0])
         ]
         coros = [
-            _fit_spectrum(spectrum, ev_per_bin, model)
-            for spectrum, model in zip(frame, models)
+            _fit_spectrum(
+                spectrum,
+                ev_per_bin,
+                deadtime_factor=dt,
+                acquisition_time=time,
+                model=model,
+            )
+            for spectrum, dt, time, model in zip(frame, dt_factors, times, models)
         ]
         tasks = [tg.create_task(coro) for coro in coros]
     results = [task.result() for task in tasks]
@@ -160,7 +208,6 @@ async def fit_array(
     detector_thickness: Quantity,
 ):
     """Fit an array of spectra in an array."""
-    print("fit_array()")
     ev_per_bin = 10
     detector_name = node.path_parts[-1]
     async with TaskGroup() as tg:

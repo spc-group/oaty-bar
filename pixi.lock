@@ -5,8 +5,6 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
-    options:
-      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -221,8 +219,6 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
-    options:
-      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -969,14 +965,15 @@ packages:
   requires_python: '>=3.9'
 - pypi: ../dmax
   name: dmax
-  version: 0.0.7
-  sha256: 0ab247df3403c57acfb24ae5ed531cf4ca1da23fc2bf4a5892b92ffbaf109e88
+  version: 0.0.8
+  sha256: 34b486971379d94f7e57e069c86286b99de143e0682fa9d111597adbf48009d5
   requires_dist:
   - httpx
   - stamina
   - pydantic
   - typing-extensions
   requires_python: '>=3.10'
+  editable: true
 - pypi: https://files.pythonhosted.org/packages/02/10/5da547df7a391dcde17f59520a231527b8571e6f46fc8efb02ccb370ab12/docutils-0.22.4-py3-none-any.whl
   name: docutils
   version: 0.22.4
@@ -2306,6 +2303,7 @@ packages:
   version: 0.1.0
   sha256: 9211d6211ef0384728f3ad1c79d0eb55f37ad8c8559b2a6d16b423497b5774b2
   requires_python: '>=3.14'
+  editable: true
 - pypi: https://files.pythonhosted.org/packages/86/f0/49f6b02dab9c05e3fd79d6129e4d9e7e9874d6e5e05369ca3b3b80a48aaa/obstore-0.9.4-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
   name: obstore
   version: 0.9.4

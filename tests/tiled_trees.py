@@ -331,6 +331,38 @@ xrf_xafs_tree = MapAdapter(
                 "ge_2element": ArrayAdapter.from_array(
                     np.load(data_dir / "xrf_spectra.npy")
                 ),
+                "ge_2element-element0-clock_ticks": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=160e6,
+                    )
+                ),
+                "ge_2element-element1-clock_ticks": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=160e6,
+                    )
+                ),
+                "ge_2element-element0-deadtime_factor": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=1.5,
+                    )
+                ),
+                "ge_2element-element1-deadtime_factor": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=1.5,
+                    )
+                ),
                 "monochromator-energy": ArrayAdapter.from_array(
                     [6911.0, 6915.8, 6921.0]
                 ),
@@ -366,6 +398,38 @@ xrf_xafs_tree_no_metadata = MapAdapter(
                 "ge_2element": ArrayAdapter.from_array(
                     np.load(data_dir / "xrf_spectra.npy")
                 ),
+                "ge_2element-element0-clock_ticks": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=0.5,
+                    )
+                ),
+                "ge_2element-element1-clock_ticks": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=0.5,
+                    )
+                ),
+                "ge_2element-element0-deadtime_factor": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=0.5,
+                    )
+                ),
+                "ge_2element-element1-deadtime_factor": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=0.5,
+                    )
+                ),
                 "monochromator-energy": ArrayAdapter.from_array(
                     [6911.0, 6915.8, 6921.0]
                 ),
@@ -393,6 +457,38 @@ xrf_line_tree = MapAdapter(
                 # Add energies for points 1-3: [6911. , 6915.8, 6921.]
                 "ge_2element": ArrayAdapter.from_array(
                     np.load(data_dir / "xrf_spectra.npy")
+                ),
+                "ge_2element-element0-clock_ticks": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=0.5,
+                    )
+                ),
+                "ge_2element-element1-clock_ticks": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=0.5,
+                    )
+                ),
+                "ge_2element-element0-deadtime_factor": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=0.5,
+                    )
+                ),
+                "ge_2element-element1-deadtime_factor": ArrayAdapter.from_array(
+                    np.full(
+                        shape=[
+                            3,
+                        ],
+                        fill_value=0.5,
+                    )
                 ),
                 "aerotech_horiz": ArrayAdapter.from_array([-100, 0, 100]),
             },
