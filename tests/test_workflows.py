@@ -15,7 +15,7 @@ def test_simple_workflow():
         workflow.description
         == "Processing for a Bluesky scan that has no significant data processing needs"
     )
-    assert workflow.version == 1
+    assert workflow.version == 2
     assert workflow.model_dump(by_alias=True)["stages"] == {
         "010-START": {
             "command": "/bin/date +%Y%m%d%H%M%S",
