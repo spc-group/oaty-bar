@@ -129,7 +129,6 @@ async def _fit_spectrum(
 async def read_frame(parent: Container, name: str, slice):
     """Read a given frame (slice) from an array."""
     loop = asyncio.get_running_loop()
-    print(parent)
     node = parent[name]
     results = await loop.run_in_executor(None, node.read, slice)
     return results
@@ -255,9 +254,13 @@ async def fit_array(
     new_signals["χ²"] = merge_values(
         [result.goodness for result in results], op=np.mean
     )
-    # Write these are separate arrays, maybe this could be a table in the future?
+    # Write these are a table
     df = pd.DataFrame(new_signals)
-    results_node.write_table(df, key=f"{detector_name}-fit")
+    table_name = f"{detector_name}-fit"
+    if table_name in await asyncio.to_thread(list, results_node.keys()):
+        await asyncio.to_thread(results_node[table_name].write, df)
+    else:
+        await asyncio.to_thread(results_node.write_table, df, key=table_name)
     return results
 
 
