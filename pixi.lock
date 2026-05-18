@@ -67,6 +67,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4a/f3/00bb1e867fba351e2d784170955713bee200c43ea306c59f30bd7e748192/dask-2026.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/77/dc8c558f7593132cf8fefec57c4f60c83b16941c574ac5f619abb3ae7933/dill-0.4.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/30/6d/1e83ce5008ae974bc00738d83c2f3ba424d516804b54b1ec26dff87cf77b/dmax-0.0.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/d5/c5db1ea3394c6e1732fb3286b3bd878b59507a8f77d32a2cebda7d7b7cd4/donfig-0.8.1.post1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/47/24/a2e7fb78fba577641c286fe33185789ab1e1569ccdf4d142e005995991d2/duckdb-1.3.2.tar.gz
       - pypi: https://files.pythonhosted.org/packages/51/79/119091c98e2bf49e24ed9f3ae69f816d715d2904aefa6a2baa039a2ba0b0/ecdsa-0.19.2-py2.py3-none-any.whl
@@ -212,7 +213,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/95/b9/a74eaec76cb4640db6c3d95cbfac39577bce82e25d87a38afe27fbf125ef/xraylarch-2026.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/de/7c/ba8ca8cbe9dbef8e83a95fc208fed8e6686c98b4719aaa0aa7f3d31fe390/zarr-3.1.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/dc/cc50210e11e465c975462439a492516a73300ab8caa8f5e0902544fd748b/zstandard-0.25.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: ../dmax
       - pypi: ./
   dev:
     channels:
@@ -287,6 +287,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/4a/f3/00bb1e867fba351e2d784170955713bee200c43ea306c59f30bd7e748192/dask-2026.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4e/8c/f3147f5c4b73e7550fe5f9352eaa956ae838d5c51eb58e7a25b9f3e2643b/decorator-5.2.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/77/dc8c558f7593132cf8fefec57c4f60c83b16941c574ac5f619abb3ae7933/dill-0.4.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/30/6d/1e83ce5008ae974bc00738d83c2f3ba424d516804b54b1ec26dff87cf77b/dmax-0.0.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/02/10/5da547df7a391dcde17f59520a231527b8571e6f46fc8efb02ccb370ab12/docutils-0.22.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/d5/c5db1ea3394c6e1732fb3286b3bd878b59507a8f77d32a2cebda7d7b7cd4/donfig-0.8.1.post1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/47/24/a2e7fb78fba577641c286fe33185789ab1e1569ccdf4d142e005995991d2/duckdb-1.3.2.tar.gz
@@ -472,7 +473,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/95/b9/a74eaec76cb4640db6c3d95cbfac39577bce82e25d87a38afe27fbf125ef/xraylarch-2026.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/de/7c/ba8ca8cbe9dbef8e83a95fc208fed8e6686c98b4719aaa0aa7f3d31fe390/zarr-3.1.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/dc/cc50210e11e465c975462439a492516a73300ab8caa8f5e0902544fd748b/zstandard-0.25.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: ../dmax
       - pypi: ./
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -963,17 +963,16 @@ packages:
   - objgraph>=1.7.2 ; extra == 'graph'
   - gprof2dot>=2022.7.29 ; extra == 'profile'
   requires_python: '>=3.9'
-- pypi: ../dmax
+- pypi: https://files.pythonhosted.org/packages/30/6d/1e83ce5008ae974bc00738d83c2f3ba424d516804b54b1ec26dff87cf77b/dmax-0.0.8-py3-none-any.whl
   name: dmax
   version: 0.0.8
-  sha256: 34b486971379d94f7e57e069c86286b99de143e0682fa9d111597adbf48009d5
+  sha256: 2d10e643f967c4fa4cfbc43bbd1b40d0ca15abe9c7b096fc848c5c04c003d271
   requires_dist:
   - httpx
-  - stamina
   - pydantic
+  - stamina
   - typing-extensions
   requires_python: '>=3.10'
-  editable: true
 - pypi: https://files.pythonhosted.org/packages/02/10/5da547df7a391dcde17f59520a231527b8571e6f46fc8efb02ccb370ab12/docutils-0.22.4-py3-none-any.whl
   name: docutils
   version: 0.22.4
