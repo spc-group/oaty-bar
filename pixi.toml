@@ -6,6 +6,7 @@ platforms = ["linux-64"]
 
 [tasks]
 tiled-server = "uvicorn tiled.server.app:app"
+prefect-server = "prefect server start"
 
 [dependencies]
 python = ">=3.14.4,<3.15"
@@ -25,9 +26,13 @@ pybaselines = ">=1.2.1, <2"
 pint = ">=0.25.3, <0.26"
 # dmax  = { path = "../dmax", editable = true }
 dmax = ">=0.0.8, <0.1.0"
+prefect = ">=3.7.1, <4"
 
 [environments]
 dev = { features = ["dev"] }
+
+[activation.env]
+PREFECT_SERVER_ANALYTICS_ENABLED="false"
 
 [feature.dev.dependencies]
 
