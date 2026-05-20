@@ -49,8 +49,8 @@ def nxnote(parent: h5py.Group, name: str, exist_ok: bool = False) -> h5py.Group:
     return nxgroup(parent=parent, name=name, nx_class="NXnote", exist_ok=exist_ok)
 
 
-def nxfield(parent: h5py.Group, name: str, value) -> h5py.Dataset:
-    field = parent.create_dataset(name, data=value)
+def nxfield(parent: h5py.Group, name: str, value=None, shape=None, dtype=None) -> h5py.Dataset:
+    field = parent.create_dataset(name, data=value, shape=shape, dtype=dtype)
     return field
 
 
@@ -89,6 +89,8 @@ def nxexternallink(
 async def write_run(
     nxfile: h5py.File,
     run: Container,
+    force: bool,
+    semaphore: asyncio.Semaphore,
 ):
     """Write a run to the HDF file as a nexus-compatiable entry.
 
@@ -112,7 +114,7 @@ async def write_run(
         streams = run
     async with asyncio.TaskGroup() as tg:
         coros = [
-            write_event_stream(name=stream_name, node=stream_node, entry=entry)
+            write_event_stream(name=stream_name, node=stream_node, entry=entry, semaphore=semaphore)
             for stream_name, stream_node in streams.items()
         ]
         tasks = [tg.create_task(coro) for coro in coros]
@@ -123,6 +125,7 @@ async def write_run(
 async def write_results(
     entry: h5py.Group,
     run: Container,
+    force: bool,
 ):
     """Write a run of results to the HDF file as a nexus-compatiable
     entry.
@@ -152,6 +155,7 @@ async def write_results(
                         name=node_name,
                         node=node,
                         parent_group=results_group,
+                        semaphore=semaphore,
                     )
                 )
             )
@@ -255,31 +259,58 @@ def insert_data_source(parent: h5py.Group, source: DataSource):
         start = stop
 
 
+async def write_array_slice(source, slc, dest, semaphore: asyncio.Semaphore):
+    async with semaphore:
+        arr = await asyncio.to_thread(source.read, slc)
+    dest[slc] = arr
+
+
 async def write_data_key(
     col_name: str,
     data_key: Mapping[str, Any],
     stream_node: Container,
     stream_group: h5py.Group,
+    semaphore: asyncio.Semaphore,
 ) -> h5py.Group:
     """Load the data from the API and write it to an HDF5 group."""
+    stream_name = stream_node.path_parts[-1]
     data_group = nxdata(stream_group, col_name)
     loop = asyncio.get_running_loop()
-    if len(data_key.get("shape", [])) < 3:
+    ndims = len(data_key.get("shape", []))
+    if ndims < 3:
         # Simple array, easier to load all at once
-        xarr = await loop.run_in_executor(
-            None, stream_node.read, [col_name, f"ts_{col_name}"]
-        )
+        async with semaphore:
+            xarr = await loop.run_in_executor(
+                None, stream_node.read, [col_name, f"ts_{col_name}"]
+            )
         nxfield(data_group, "value", xarr[col_name])
-        timestamps = xarr.get(f"ts_{col_name}")
-        if timestamps is not None:
-            nxfield(data_group, "EPOCH", timestamps)
-            nxfield(data_group, "time", timestamps - np.min(timestamps))
-            data_group["time"].attrs["units"] = "s"
-            data_group.attrs["axes"] = "time"
     else:
-        # Area detector array, so load in parallel
-        pass
-    log.info(f"Could not find timestamps for dataset '{col_name}'")
+        # Create an empty array to hold the data
+        dtype = data_key.get("dtype_numpy", None)
+        shape = data_key["shape"]
+        array_group = nxfield(data_group, "value", shape=shape, dtype=dtype)
+        # Load slices in parallel
+        array_node = stream_node[col_name]
+        coros = [
+            write_array_slice(array_node, slc, array_group, semaphore=semaphore)
+            for slc in range(shape[0])
+        ]
+        log.info(f"Loading {ndims}-D array '{stream_name}/{col_name}'")
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(coro) for coro in coros]
+        # Read just the timestamp for setting later
+        async with semaphore:
+            xarr = await loop.run_in_executor(
+                None, stream_node.read, [f"ts_{col_name}"]
+            )
+    # Set timestamps if we can, but not every array has timestamp information
+    timestamps = xarr.get(f"ts_{col_name}")
+    if timestamps is not None:
+        nxfield(data_group, "EPOCH", timestamps)
+        nxfield(data_group, "time", timestamps - np.min(timestamps))
+        data_group["time"].attrs["units"] = "s"
+        data_group.attrs["axes"] = "time"
+    log.info(f"Could not find timestamps for dataset '{stream_name}/{col_name}'")
 
     # Extra parameters
     data_group.attrs["signal"] = "value"
@@ -287,16 +318,17 @@ async def write_data_key(
         data_group["value"].attrs["units"] = data_key["units"]
 
 
-async def write_table(name: str, node, parent_group: h5py.Group) -> h5py.Group:
+async def write_table(name: str, node, parent_group: h5py.Group, semaphore: asyncio.Semaphore) -> h5py.Group:
     """Write a Tiled table to the HDF file."""
     table_group = nxnote(parent_group, name)
-    df = await asyncio.to_thread(node.read)
+    async with semaphore:
+        df = await asyncio.to_thread(node.read)
     for series_name, series in df.items():
         data_group = nxdata(table_group, series_name)
         nxfield(data_group, "value", series.values)
 
 
-async def write_event_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
+async def write_event_stream(name: str, node, entry: h5py.Group, semaphore: asyncio.Semaphore) -> h5py.Group:
     """Write a stream to the HDF file as a nexus-compatiable entry.
 
     *node* should be the container for this stream. E.g.
@@ -333,7 +365,7 @@ async def write_event_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
     async with asyncio.TaskGroup() as tg:
         coros = [
             write_data_key(
-                col_name, data_key, stream_node=node, stream_group=stream_group
+                col_name, data_key, stream_node=node, stream_group=stream_group, semaphore=semaphore
             )
             for col_name, data_key in data_keys.items()
         ]
@@ -419,7 +451,7 @@ async def write_event_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
 
 
 async def serialize_hdf(
-    buff: IO[bytes] | Path, run: Container, results_runs: Container | None = None
+        buff: IO[bytes] | Path, run: Container, results_runs: Container | None = None, *, semaphore: asyncio.Semaphore, force: bool = False
 ):
     """Encode a bluesky run into an HDF5 file with NeXus annotations.
 
@@ -428,12 +460,13 @@ async def serialize_hdf(
     """
     if isinstance(buff, BytesIO):
         buff.seek(0)
-    with h5py.File(buff, mode="w") as nxfile:
+    h5_mode = 'w' if force else 'x'
+    with h5py.File(buff, mode=h5_mode) as nxfile:
         # Write data entry to the nexus file
-        entry = await write_run(nxfile=nxfile, run=run)
+        entry = await write_run(nxfile=nxfile, run=run, force=force, semaphore=semaphore)
         # Write the results after the initial raw data have been written
         results = results_runs.values() if results_runs is not None else []
-        coros = [write_results(entry=entry, run=run) for run in results]
+        coros = [write_results(entry=entry, run=run, force=force) for run in results]
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(coro) for coro in coros]
 
@@ -461,8 +494,29 @@ def build_file_name(metadata: Mapping[str, Any]) -> str:
 
 
 def export_hdf(
-    uid: str, target_dir: Path, *, raw_profile: str, results_profile: str | None = None
+        uid: str, target_dir: Path, *, raw_profile: str, results_profile: str | None = None, force: bool = False, semaphore: asyncio.Semaphore | None = None
 ):
+    """Export a Tiled run with UID *uid* to an HDF5 file in *target_dir*.
+
+    The name of the resulting HDF5 file will be generated from the run
+    metadata. It will include the first portion of the UID, so
+    presumably it will be unique. If a file of the same name already
+    exists in *target_dir*, this operation will fail unless *force* is
+    True, in which case the existing HDF file will be overwritten.
+    
+    Parameters
+    ==========
+    uid
+      The UID of the Bluesky run to read from in the Tiled catalog.
+    target_dir
+      An existing folder in which to create a new HDF5 file.
+    sempahore
+      A locking semaphore to limit concurrent API connections. If
+      omitted, a default will be created.
+
+    """
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(10)
     raw_catalog = from_profile(raw_profile)
     run = raw_catalog[uid]
     if results_profile is not None:
@@ -471,7 +525,7 @@ def export_hdf(
     else:
         results_runs = None
     target_file = target_dir / build_file_name(run.metadata)
-    asyncio.run(serialize_hdf(buff=target_file, run=run, results_runs=results_runs))
+    asyncio.run(serialize_hdf(buff=target_file, run=run, results_runs=results_runs, force=force, semaphore=semaphore))
 
 
 def main(args: Sequence[str] | None = None):
@@ -492,11 +546,37 @@ def main(args: Sequence[str] | None = None):
         "--results-profile",
         help="The name of the Tiled profile used for processed run reuslts data.",
     )
+    parser.add_argument(
+        "-f", "--force",
+        action="store_true",
+        help="Overwrite existing datasets in the HDF5 file."
+    )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Provide verbose information.",
+    )
+    parser.add_argument(
+        "--max-workers",
+        default=10,
+        type=int,
+        help="Number of concurrent network connections to allow. Higher number can improve performance but also overload the server."
+    )
+    parser.add_argument(
+        "-vv",
+        action="store_true",
+        help="Provide extremely verbose information.",
+    )
     parsed = parser.parse_args(args)
+    log_level = logging.DEBUG if parsed.vv else logging.INFO if parsed.verbose else logging.WARNING
+    logging.basicConfig(level=log_level)
     # Do the actual exporting
+    semaphore = asyncio.Semaphore(parsed.max_workers)
     export_hdf(
         uid=parsed.uid,
         target_dir=Path(parsed.target_dir),
+        force=parsed.force,
         raw_profile=parsed.raw_profile,
         results_profile=parsed.results_profile,
+        semaphore=semaphore,
     )

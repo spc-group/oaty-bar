@@ -131,7 +131,7 @@ root:NXroot
                 @units = 'keV'
             ge_8element:NXdata
               @signal = 'value'
-              value = float64(100x8x1024)
+              value = uint32(100x8x1024)
                 @target = '/7d1daf1d-60c7-4aa7-a668-d1cd97e5335f/instrume...'
             ge_8element-element0-all_event:NXdata
               @signal = 'value'
@@ -244,7 +244,7 @@ def test_external_datasets(nxfile):
     uid = "7d1daf1d-60c7-4aa7-a668-d1cd97e5335f"
     ds = nxfile[f"{uid}/data/ge_8element"]
     assert ds.shape == (100, 8, 1024)
-    assert str(ds.dtype) == "float64"
+    assert str(ds.dtype) == "uint32"
     assert np.min(ds) == 1
 
 
