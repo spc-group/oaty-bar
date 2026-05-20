@@ -5,8 +5,6 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
-    options:
-      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -173,6 +171,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/90/ad/cba91b3bcf04073e4d1655a5c1710ef3f457f56f7d1b79dcc3d72f4dd912/plotly-6.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4b/88/bc1d779c8680e75fe77746511004a0963984b51aec65f5fb0bc64392c371/prefect-3.7.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/32/19/2eb0b80e92fb1597ce53f765548fa58a87949fceeb0bacb350388d2be00a/prefect_sqlalchemy-0.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/9b/d4b1e644385499c8346fa9b622a3f030dce14cd6ef8a1871c221a17a67e7/prometheus_client-0.25.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b5/70/5d8df3b09e25bce090399cf48e452d25c935ab72dad19406c77f4e828045/psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/32/69/f1b537ee70b7def42d63124a539ed3026a11a3ffc3086947a1ca6e861868/py_key_value_aio-0.4.4-py3-none-any.whl
@@ -268,8 +267,6 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
-    options:
-      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -457,6 +454,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/90/ad/cba91b3bcf04073e4d1655a5c1710ef3f457f56f7d1b79dcc3d72f4dd912/plotly-6.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4b/88/bc1d779c8680e75fe77746511004a0963984b51aec65f5fb0bc64392c371/prefect-3.7.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/32/19/2eb0b80e92fb1597ce53f765548fa58a87949fceeb0bacb350388d2be00a/prefect_sqlalchemy-0.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/9b/d4b1e644385499c8346fa9b622a3f030dce14cd6ef8a1871c221a17a67e7/prometheus_client-0.25.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/84/03/0d3ce49e2505ae70cf43bc5bb3033955d2fc9f932163e84dc0779cc47f48/prompt_toolkit-3.0.52-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b5/70/5d8df3b09e25bce090399cf48e452d25c935ab72dad19406c77f4e828045/psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl
@@ -2782,8 +2780,9 @@ packages:
 - pypi: ./
   name: oaty-bar
   version: 0.1.0
-  sha256: 9211d6211ef0384728f3ad1c79d0eb55f37ad8c8559b2a6d16b423497b5774b2
+  sha256: c0545d190a70d1fd3c9c228e4ff39d62f49c15620d066639f65649809e5870cb
   requires_python: '>=3.14'
+  editable: true
 - pypi: https://files.pythonhosted.org/packages/be/9c/92789c596b8df838baa98fa71844d84283302f7604ed565dafe5a6b5041a/oauthlib-3.3.1-py3-none-any.whl
   name: oauthlib
   version: 3.3.1
@@ -3263,6 +3262,14 @@ packages:
   - prefect-snowflake>=0.28.0 ; extra == 'snowflake'
   - prefect-sqlalchemy>=0.5.0 ; extra == 'sqlalchemy'
   requires_python: '>=3.10,<3.15'
+- pypi: https://files.pythonhosted.org/packages/32/19/2eb0b80e92fb1597ce53f765548fa58a87949fceeb0bacb350388d2be00a/prefect_sqlalchemy-0.6.1-py3-none-any.whl
+  name: prefect-sqlalchemy
+  version: 0.6.1
+  sha256: c7cf4dbaedf30b987cbdbb3cd645e55d6d59dbac6308f8385b808f936da267e3
+  requires_dist:
+  - sqlalchemy>=1.4.31,<3
+  - prefect>=3.6.17
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/8d/9b/d4b1e644385499c8346fa9b622a3f030dce14cd6ef8a1871c221a17a67e7/prometheus_client-0.25.0-py3-none-any.whl
   name: prometheus-client
   version: 0.25.0

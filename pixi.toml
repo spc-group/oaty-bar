@@ -26,7 +26,8 @@ pybaselines = ">=1.2.1, <2"
 pint = ">=0.25.3, <0.26"
 # dmax  = { path = "../dmax", editable = true }
 dmax = ">=0.0.8, <0.1.0"
-prefect = ">=3.7.1, <4"
+prefect = { version = ">=3.7.1, <4", extras = ["sqlalchemy"] }
+platformdirs = ">=4.9.6, <5"
 
 [environments]
 dev = { features = ["dev"] }

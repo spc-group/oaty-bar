@@ -1,3 +1,4 @@
+import asyncio
 import io
 from pathlib import Path
 from typing import IO
@@ -195,13 +196,18 @@ class NexusIO(NXFile):
 
 
 @pytest_asyncio.fixture()
-async def nxfile(xafs_run):
+async def nxfile(xafs_run, semaphore):
     # Generate the headers
     buff = io.BytesIO()
-    await serialize_hdf(buff, xafs_run)
+    await serialize_hdf(buff, xafs_run, semaphore=semaphore)
     with NexusIO(buff, mode="r") as fd:
         # Write data entry to the nexus file
         yield fd
+
+
+@pytest.fixture()
+def semaphore():
+    return asyncio.Semaphore(9999)
 
 
 def test_xafs_specification(nxfile):
@@ -222,7 +228,7 @@ def test_file_structure(nxfile):
 
 
 @pytest.mark.asyncio
-async def test_missing_hints(xafs_run):
+async def test_missing_hints(xafs_run, semaphore):
     """Make sure the stream still writes if there are not hints."""
     node = mock.AsyncMock()
     node.metadata = {
@@ -233,6 +239,7 @@ async def test_missing_hints(xafs_run):
         name="primary",
         node=node,
         entry=mock.MagicMock(),
+        semaphore=semaphore,
     )
 
 
@@ -289,9 +296,11 @@ def test_export_hdf(tmp_path, xafs_run, mocker):
 
 
 @pytest.mark.asyncio
-async def test_export_results(xafs_run, results_catalog, mocker):
+async def test_export_results(xafs_run, results_catalog, mocker, semaphore):
     buff = io.BytesIO()
-    await serialize_hdf(buff, xafs_run, results_runs=results_catalog)
+    await serialize_hdf(
+        buff, xafs_run, results_runs=results_catalog, semaphore=semaphore
+    )
     with h5py.File(buff, mode="r") as fd:
         # Check that all datasets are in the 'results' group
         results = fd["7d1daf1d-60c7-4aa7-a668-d1cd97e5335f/results"]

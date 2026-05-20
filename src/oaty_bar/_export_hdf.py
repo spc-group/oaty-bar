@@ -49,8 +49,23 @@ def nxnote(parent: h5py.Group, name: str, exist_ok: bool = False) -> h5py.Group:
     return nxgroup(parent=parent, name=name, nx_class="NXnote", exist_ok=exist_ok)
 
 
-def nxfield(parent: h5py.Group, name: str, value=None, shape=None, dtype=None) -> h5py.Dataset:
-    field = parent.create_dataset(name, data=value, shape=shape, dtype=dtype)
+def nxfield(
+    parent: h5py.Group,
+    name: str,
+    value=None,
+    shape=None,
+    dtype=None,
+    compression=None,
+    chunks=None,
+) -> h5py.Dataset:
+    field = parent.create_dataset(
+        name,
+        data=value,
+        shape=shape,
+        dtype=dtype,
+        compression=compression,
+        chunks=chunks,
+    )
     return field
 
 
@@ -114,7 +129,9 @@ async def write_run(
         streams = run
     async with asyncio.TaskGroup() as tg:
         coros = [
-            write_event_stream(name=stream_name, node=stream_node, entry=entry, semaphore=semaphore)
+            write_event_stream(
+                name=stream_name, node=stream_node, entry=entry, semaphore=semaphore
+            )
             for stream_name, stream_node in streams.items()
         ]
         tasks = [tg.create_task(coro) for coro in coros]
@@ -126,6 +143,7 @@ async def write_results(
     entry: h5py.Group,
     run: Container,
     force: bool,
+    semaphore: asyncio.Semaphore,
 ):
     """Write a run of results to the HDF file as a nexus-compatiable
     entry.
@@ -288,7 +306,18 @@ async def write_data_key(
         # Create an empty array to hold the data
         dtype = data_key.get("dtype_numpy", None)
         shape = data_key["shape"]
-        array_group = nxfield(data_group, "value", shape=shape, dtype=dtype)
+        if data_key.get("dtype", None) == "array":
+            compression, chunks = ("gzip", (1, *shape[1:]))
+        else:
+            compression, chunks = (None, None)
+        array_group = nxfield(
+            data_group,
+            "value",
+            shape=shape,
+            dtype=dtype,
+            compression=compression,
+            chunks=chunks,
+        )
         # Load slices in parallel
         array_node = stream_node[col_name]
         coros = [
@@ -318,7 +347,9 @@ async def write_data_key(
         data_group["value"].attrs["units"] = data_key["units"]
 
 
-async def write_table(name: str, node, parent_group: h5py.Group, semaphore: asyncio.Semaphore) -> h5py.Group:
+async def write_table(
+    name: str, node, parent_group: h5py.Group, semaphore: asyncio.Semaphore
+) -> h5py.Group:
     """Write a Tiled table to the HDF file."""
     table_group = nxnote(parent_group, name)
     async with semaphore:
@@ -328,7 +359,9 @@ async def write_table(name: str, node, parent_group: h5py.Group, semaphore: asyn
         nxfield(data_group, "value", series.values)
 
 
-async def write_event_stream(name: str, node, entry: h5py.Group, semaphore: asyncio.Semaphore) -> h5py.Group:
+async def write_event_stream(
+    name: str, node, entry: h5py.Group, semaphore: asyncio.Semaphore
+) -> h5py.Group:
     """Write a stream to the HDF file as a nexus-compatiable entry.
 
     *node* should be the container for this stream. E.g.
@@ -365,7 +398,11 @@ async def write_event_stream(name: str, node, entry: h5py.Group, semaphore: asyn
     async with asyncio.TaskGroup() as tg:
         coros = [
             write_data_key(
-                col_name, data_key, stream_node=node, stream_group=stream_group, semaphore=semaphore
+                col_name,
+                data_key,
+                stream_node=node,
+                stream_group=stream_group,
+                semaphore=semaphore,
             )
             for col_name, data_key in data_keys.items()
         ]
@@ -451,7 +488,12 @@ async def write_event_stream(name: str, node, entry: h5py.Group, semaphore: asyn
 
 
 async def serialize_hdf(
-        buff: IO[bytes] | Path, run: Container, results_runs: Container | None = None, *, semaphore: asyncio.Semaphore, force: bool = False
+    buff: IO[bytes] | Path,
+    run: Container,
+    results_runs: Container | None = None,
+    *,
+    semaphore: asyncio.Semaphore,
+    force: bool = False,
 ):
     """Encode a bluesky run into an HDF5 file with NeXus annotations.
 
@@ -460,13 +502,18 @@ async def serialize_hdf(
     """
     if isinstance(buff, BytesIO):
         buff.seek(0)
-    h5_mode = 'w' if force else 'x'
+    h5_mode = "w" if force else "x"
     with h5py.File(buff, mode=h5_mode) as nxfile:
         # Write data entry to the nexus file
-        entry = await write_run(nxfile=nxfile, run=run, force=force, semaphore=semaphore)
+        entry = await write_run(
+            nxfile=nxfile, run=run, force=force, semaphore=semaphore
+        )
         # Write the results after the initial raw data have been written
         results = results_runs.values() if results_runs is not None else []
-        coros = [write_results(entry=entry, run=run, force=force) for run in results]
+        coros = [
+            write_results(entry=entry, run=run, force=force, semaphore=semaphore)
+            for run in results
+        ]
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(coro) for coro in coros]
 
@@ -494,7 +541,13 @@ def build_file_name(metadata: Mapping[str, Any]) -> str:
 
 
 def export_hdf(
-        uid: str, target_dir: Path, *, raw_profile: str, results_profile: str | None = None, force: bool = False, semaphore: asyncio.Semaphore | None = None
+    uid: str,
+    target_dir: Path,
+    *,
+    raw_profile: str,
+    results_profile: str | None = None,
+    force: bool = False,
+    semaphore: asyncio.Semaphore | None = None,
 ):
     """Export a Tiled run with UID *uid* to an HDF5 file in *target_dir*.
 
@@ -503,7 +556,7 @@ def export_hdf(
     presumably it will be unique. If a file of the same name already
     exists in *target_dir*, this operation will fail unless *force* is
     True, in which case the existing HDF file will be overwritten.
-    
+
     Parameters
     ==========
     uid
@@ -525,7 +578,15 @@ def export_hdf(
     else:
         results_runs = None
     target_file = target_dir / build_file_name(run.metadata)
-    asyncio.run(serialize_hdf(buff=target_file, run=run, results_runs=results_runs, force=force, semaphore=semaphore))
+    asyncio.run(
+        serialize_hdf(
+            buff=target_file,
+            run=run,
+            results_runs=results_runs,
+            force=force,
+            semaphore=semaphore,
+        )
+    )
 
 
 def main(args: Sequence[str] | None = None):
@@ -547,12 +608,14 @@ def main(args: Sequence[str] | None = None):
         help="The name of the Tiled profile used for processed run reuslts data.",
     )
     parser.add_argument(
-        "-f", "--force",
+        "-f",
+        "--force",
         action="store_true",
-        help="Overwrite existing datasets in the HDF5 file."
+        help="Overwrite existing datasets in the HDF5 file.",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Provide verbose information.",
     )
@@ -560,7 +623,7 @@ def main(args: Sequence[str] | None = None):
         "--max-workers",
         default=10,
         type=int,
-        help="Number of concurrent network connections to allow. Higher number can improve performance but also overload the server."
+        help="Number of concurrent network connections to allow. Higher number can improve performance but also overload the server.",
     )
     parser.add_argument(
         "-vv",
@@ -568,7 +631,11 @@ def main(args: Sequence[str] | None = None):
         help="Provide extremely verbose information.",
     )
     parsed = parser.parse_args(args)
-    log_level = logging.DEBUG if parsed.vv else logging.INFO if parsed.verbose else logging.WARNING
+    log_level = (
+        logging.DEBUG
+        if parsed.vv
+        else logging.INFO if parsed.verbose else logging.WARNING
+    )
     logging.basicConfig(level=log_level)
     # Do the actual exporting
     semaphore = asyncio.Semaphore(parsed.max_workers)

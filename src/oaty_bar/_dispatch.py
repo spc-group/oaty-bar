@@ -2,39 +2,17 @@ import argparse
 import asyncio
 import json
 import logging
-import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Sequence
 
 import dmax
 import httpx
-from pydantic import BaseModel
 from websockets.asyncio.client import ClientConnection, connect
 
+from ._config import OatyBarConfig, load_config
 from .workflows import load_workflow
 
 log = logging.getLogger("oaty-bar")
-
-
-class TiledConfig(BaseModel):
-    websocket_uri: str
-
-
-class DataManagementStation(BaseModel):
-    """Maps directly onto ``dmax.AsyncClient()``."""
-
-    username: str
-    password: str
-    station_name: str
-    scheduling_uri: str = ""
-    data_storage_uri: str = ""
-    processing_uri: str = ""
-
-
-class OatyBarConfig(BaseModel):
-    tiled: TiledConfig
-    data_management_stations: Mapping[str, DataManagementStation] = {}
 
 
 def load_dm_apis(config: OatyBarConfig):
@@ -139,9 +117,7 @@ async def run_dispatcher(config_file: Path):
     and submit workflows to various data managament APIs.
 
     """
-    with open(config_file, mode="rb") as config_fd:
-        cfg_dict = tomllib.load(config_fd)
-    config = OatyBarConfig(**cfg_dict)
+    config = load_config(config_file)
     # Error out here if we can't access the DM API
     dm_apis = load_dm_apis(config)
     log.info("Checking DM API connections…")
