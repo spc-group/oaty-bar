@@ -8,7 +8,7 @@ from pathlib import Path
 from prefect import flow, task
 from prefect.logging import get_run_logger
 from prefect.variables import Variable
-from prefect_sqlalchemy import SqlAlchemyConnector
+from prefect_sqlalchemy import AsyncSqlAlchemyConnector
 
 
 @task()
@@ -21,7 +21,10 @@ async def dump_postgres(
 ) -> Path:
     # Decide where to store the backup
     log = get_run_logger()
-    root_dir = Path(await Variable.get("database-backup-path"))
+    root_dir = await Variable.get("database-backup-path")
+    if root_dir is None:
+        raise ValueError("Variable 'database-backup-path' not set.")
+    root_dir = Path(root_dir)
     now = dt.datetime.now()
     target_dir = root_dir / f"{database}-{now.strftime('%Y-%m-%d-%H-%M')}"
     log.info(f"Backing up postgres server at '{host}:{port}/{database}'.")
@@ -71,7 +74,7 @@ async def backup_database(name: str):
     backup.
 
     """
-    database_block = await SqlAlchemyConnector.load(name)
+    database_block = await AsyncSqlAlchemyConnector.load(name)
     connection = database_block.connection_info
     backup_dir = await dump_postgres(
         username=connection.username,
