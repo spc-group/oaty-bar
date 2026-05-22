@@ -1,4 +1,3 @@
-import argparse
 import asyncio
 import datetime as dt
 import json
@@ -11,6 +10,7 @@ from typing import IO, Any
 
 import h5py
 import numpy as np
+from prefect import flow
 from tiled.client import from_profile
 from tiled.client.container import Container
 from tiled.client.dataframe import DataFrameClient
@@ -540,9 +540,10 @@ def build_file_name(metadata: Mapping[str, Any]) -> str:
     return f"{base_name}.h5"
 
 
+@flow()
 def export_hdf(
     uid: str,
-    target_dir: Path,
+    target_dir: str,
     *,
     raw_profile: str,
     results_profile: str | None = None,
@@ -563,21 +564,27 @@ def export_hdf(
       The UID of the Bluesky run to read from in the Tiled catalog.
     target_dir
       An existing folder in which to create a new HDF5 file.
+    raw_profile
+      The name of the Tiled profile to use for reading Bluesky runs.
+    results_profile
+      The name of the Tiled profile to use for reading processed
+      results data.
     sempahore
       A locking semaphore to limit concurrent API connections. If
       omitted, a default will be created.
 
     """
+    target_dir_ = Path(target_dir)
     if semaphore is None:
         semaphore = asyncio.Semaphore(10)
     raw_catalog = from_profile(raw_profile)
     run = raw_catalog[uid]
-    if results_profile is not None:
+    if results_profile:
         results_catalog = from_profile(results_profile)
         results_runs = results_catalog.search(Eq("run_uid", uid))
     else:
         results_runs = None
-    target_file = target_dir / build_file_name(run.metadata)
+    target_file = target_dir_ / build_file_name(run.metadata)
     asyncio.run(
         serialize_hdf(
             buff=target_file,
@@ -586,64 +593,4 @@ def export_hdf(
             force=force,
             semaphore=semaphore,
         )
-    )
-
-
-def main(args: Sequence[str] | None = None):
-    """Main entry-point for exporting an HDF5 file for a given run."""
-    # Argument handling
-    parser = argparse.ArgumentParser(
-        prog="export-hdf",
-        description="Export an HDF5 file for a given run",
-    )
-    parser.add_argument("uid", help="The UID of the bluesky run to export.")
-    parser.add_argument(
-        "target_dir", help="The DM directory to receive the exported file."
-    )
-    parser.add_argument(
-        "--raw-profile", help="The name of the Tiled profile used for raw runs."
-    )
-    parser.add_argument(
-        "--results-profile",
-        help="The name of the Tiled profile used for processed run reuslts data.",
-    )
-    parser.add_argument(
-        "-f",
-        "--force",
-        action="store_true",
-        help="Overwrite existing datasets in the HDF5 file.",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Provide verbose information.",
-    )
-    parser.add_argument(
-        "--max-workers",
-        default=10,
-        type=int,
-        help="Number of concurrent network connections to allow. Higher number can improve performance but also overload the server.",
-    )
-    parser.add_argument(
-        "-vv",
-        action="store_true",
-        help="Provide extremely verbose information.",
-    )
-    parsed = parser.parse_args(args)
-    log_level = (
-        logging.DEBUG
-        if parsed.vv
-        else logging.INFO if parsed.verbose else logging.WARNING
-    )
-    logging.basicConfig(level=log_level)
-    # Do the actual exporting
-    semaphore = asyncio.Semaphore(parsed.max_workers)
-    export_hdf(
-        uid=parsed.uid,
-        target_dir=Path(parsed.target_dir),
-        force=parsed.force,
-        raw_profile=parsed.raw_profile,
-        results_profile=parsed.results_profile,
-        semaphore=semaphore,
     )

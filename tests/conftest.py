@@ -1,6 +1,21 @@
 import pytest
+from prefect.testing.utilities import prefect_test_harness
 from tiled.client import Context, from_context
 from tiled.server.app import build_app_from_config
+
+from .tiled_trees import build_tree
+
+
+@pytest.fixture(scope="package")
+def xafs_run():
+    with build_tree() as run:
+        yield run
+
+
+@pytest.fixture(autouse=True, scope="session")
+def prefect_server():
+    with prefect_test_harness():
+        yield
 
 
 @pytest.fixture()

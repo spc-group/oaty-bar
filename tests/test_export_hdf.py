@@ -12,13 +12,10 @@ import pytest_asyncio
 from nexusformat.nexus import NXFile
 
 from oaty_bar._export_hdf import (
-    main,
     nxexternallink,
     serialize_hdf,
     write_event_stream,
 )
-
-from .tiled_trees import build_tree
 
 specification = """
 root:NXroot
@@ -146,12 +143,6 @@ root:NXroot
 """
 
 
-@pytest.fixture(scope="package")
-def xafs_run():
-    with build_tree() as run:
-        yield run
-
-
 @pytest.fixture()
 def results_catalog(results_catalog):
     run = results_catalog.create_container(
@@ -271,28 +262,6 @@ def test_nxexternallink_targets():
         linkB = fd.get("externB", getlink=True)
     assert linkA.path == "/entry/data"
     assert linkB.path == "/entry/data"
-
-
-def test_export_hdf(tmp_path, xafs_run, mocker):
-    from_profile = mocker.MagicMock(
-        return_value={
-            "123-45-67890": xafs_run,
-        }
-    )
-    mocker.patch("oaty_bar._export_hdf.from_profile", new=from_profile)
-    main(
-        [
-            "123-45-67890",
-            str(tmp_path),
-            "--raw-profile",
-            "raw_catalog",
-            # "--results-profile",
-            # "proc_catalog",
-        ]
-    )
-    # Check that the file was created
-    target_file = tmp_path / "202210060914-NMC-811-Pristine-rel_scan-7d1daf1d.h5"
-    assert target_file.exists()
 
 
 @pytest.mark.asyncio

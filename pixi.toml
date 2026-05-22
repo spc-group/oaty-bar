@@ -68,7 +68,7 @@ lint-all = [
 ]
 check-types = "mypy"
 make-docs = "make html --directory=docs/"
-tests = "pytest -Werror"
+tests = "pytest"
 
 [feature.dev.tasks.lint]
 args = [

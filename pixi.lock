@@ -2992,7 +2992,7 @@ packages:
 - pypi: ./
   name: oaty-bar
   version: 0.1.0
-  sha256: c0545d190a70d1fd3c9c228e4ff39d62f49c15620d066639f65649809e5870cb
+  sha256: 8359679977a73cd2ed052f48ed679cf410954644c5e5951e7d009679d47f5161
   requires_python: '>=3.14'
   editable: true
 - pypi: https://files.pythonhosted.org/packages/be/9c/92789c596b8df838baa98fa71844d84283302f7604ed565dafe5a6b5041a/oauthlib-3.3.1-py3-none-any.whl
