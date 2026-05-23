@@ -4,13 +4,14 @@ import warnings
 import chemformula
 import numpy as np
 import pytest
+from prefect import flow
 from tiled.adapters.mapping import MapAdapter
 from tiled.client import Context, from_context
 from tiled.server.app import build_app
 
 from oaty_bar._fit_fluorescence import (
     _fit_spectrum,
-    fit_fluorescence,
+    fit_run_fluorescence,
     parse_chemical_formula,
     ureg,
     xrf_model,
@@ -62,7 +63,14 @@ async def test_writes_result_container(
 ):
     run = xrf_catalog["xafs_run"]
     t0 = time.perf_counter()
-    await fit_fluorescence(run=run, results_catalog=results_catalog, max_workers=1)
+
+    @flow()
+    async def do_fit():
+        await fit_run_fluorescence(
+            run=run, results_catalog=results_catalog, max_workers=1
+        )
+
+    await do_fit()
     t1 = time.perf_counter()
     assert len(results_catalog.keys()) == 1
     result = results_catalog.values().first()
@@ -80,7 +88,12 @@ async def test_writes_result_container(
 @pytest.mark.asyncio
 async def test_setup_xrf_model(xrf_catalog, results_catalog, ignore_larch_warnings):
     run = xrf_catalog["xafs_run"]
-    results = await fit_fluorescence(run=run, results_catalog=results_catalog)
+
+    @flow()
+    async def do_fit():
+        return await fit_run_fluorescence(run=run, results_catalog=results_catalog)
+
+    results = await do_fit()
     model = results[0][0].model
     assert model.detector.material == "Ge"
     assert model.detector.thickness == pytest.approx(0.6)
@@ -90,15 +103,26 @@ async def test_setup_xrf_model(xrf_catalog, results_catalog, ignore_larch_warnin
 async def test_missing_metadata(xrf_catalog, results_catalog, ignore_larch_warnings):
     """Make sure the procedure is robust against incomplete metadata."""
     run = xrf_catalog["xafs_run_no_metadata"]
+
     # Just needs to run, no results expected
-    results = await fit_fluorescence(run=run, results_catalog=results_catalog)
+    @flow()
+    async def do_fit():
+        return await fit_run_fluorescence(run=run, results_catalog=results_catalog)
+
+    results = await do_fit()
 
 
 @pytest.mark.asyncio
 async def test_baseline_energy(xrf_catalog, results_catalog, ignore_larch_warnings):
     """Can the XRF model get the x-ray energy from baseline metadata."""
     run = xrf_catalog["line_run"]
-    results = await fit_fluorescence(run=run, results_catalog=results_catalog)
+
+    @flow()
+    async def do_fit():
+        return await fit_run_fluorescence(run=run, results_catalog=results_catalog)
+
+    results = await do_fit()
+
     model = results[0][0].model
     assert model.xray_energy == 9.001
 
@@ -164,9 +188,15 @@ async def test_deadtime_correction(xrf_catalog, results_catalog, ignore_larch_wa
     stream = xrf_catalog["xafs_run"]["primary"]
     run = xrf_catalog["xafs_run"]
     t0 = time.perf_counter()
-    results = await fit_fluorescence(
-        run=run, results_catalog=results_catalog, max_workers=1
-    )
+
+    @flow()
+    async def do_fit():
+        return await fit_run_fluorescence(
+            run=run, results_catalog=results_catalog, max_workers=1
+        )
+
+    results = await do_fit()
+
     raw_value = 0.148586
     dt_factor = 1.5
     ac_time = 2  # seconds

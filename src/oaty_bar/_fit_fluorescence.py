@@ -13,6 +13,7 @@ from chemformula import ChemFormula
 from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
 from pint import Quantity, UnitRegistry
+from prefect import flow, task
 from pybaselines import Baseline
 from tiled.client import from_profile
 from tiled.client.array import ArrayClient
@@ -282,7 +283,24 @@ def detector_metadata(config, name):
     return material, thickness
 
 
+@flow()
 async def fit_fluorescence(
+    run_uid: str,
+    raw_profile: str,
+    results_profile: str,
+    max_workers: int | None,
+):
+    # Load the necessary Tiled catalogs
+    raw_catalog = from_profile(raw_profile)
+    run = raw_catalog[run_uid]
+    results_catalog = from_profile(results_profile)
+    return await fit_run_fluorescence(
+        run=run, results_catalog=results_catalog, max_workers=max_workers
+    )
+
+
+@task()
+async def fit_run_fluorescence(
     run: Container, results_catalog: Container, max_workers=None
 ):
     tasks: list[asyncio.Task] = []
@@ -346,14 +364,16 @@ async def fit_fluorescence(
     return results
 
 
-def main(args: Sequence[str] | None = None):
+def main(argv: Sequence[str] | None = None):
     """Main entry-point for exporting an HDF5 file for a given run."""
     # Argument handling
     parser = argparse.ArgumentParser(
         prog="fit-fluorescence",
         description="Apply corrections and fit fluorescence spectra to produce elemental contributions",
     )
-    parser.add_argument("uid", help="The UID of the bluesky run to process.")
+    parser.add_argument(
+        "run_uid", help="The UID of the bluesky run to process.", type=str
+    )
     parser.add_argument(
         "--raw-profile", help="The name of the Tiled profile used for raw runs."
     )
@@ -367,14 +387,21 @@ def main(args: Sequence[str] | None = None):
         default=None,
         help="How many worker threads will be processing spectra.",
     )
-    parsed = parser.parse_args(args)
-    # Load the necessary Tiled catalogs
-    raw_catalog = from_profile(parsed.raw_profile)
-    run = raw_catalog[parsed.uid]
-    results_catalog = from_profile(parsed.results_profile)
-    # Do the actual exporting
-    asyncio.run(
-        fit_fluorescence(
-            run=run, results_catalog=results_catalog, max_workers=parsed.max_workers
-        )
+    parser.add_argument(
+        "--deploy",
+        action="store_true",
+        help="Start worker listening for new work instead of running immediately.",
     )
+    args = parser.parse_args(argv)
+    # Do the actual exporting
+    if args.deploy:
+        fit_fluorescence.serve()
+    else:
+        asyncio.run(
+            fit_fluorescence(
+                run_uid=args.run_uid,
+                raw_profile=args.raw_profile,
+                results_profile=args.results_profile,
+                max_workers=args.max_workers,
+            )
+        )
