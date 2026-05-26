@@ -9,6 +9,8 @@ import pytest_asyncio
 from dmax.data_storage import Experiment
 from websockets.asyncio.client import connect
 from websockets.asyncio.server import serve
+from prefect.events.schemas.deployment_triggers import DeploymentEventTrigger
+from prefect import events
 
 from oaty_bar._dispatch import OatyBarConfig, dispatch_new_runs, load_dm_apis
 from oaty_bar.workflows import Workflow
@@ -101,6 +103,70 @@ async def test_handle_message(websocket, mocker):
     await asyncio.sleep(0.01)
     assert not api.submit_processing_job.assert_called_once_with(
         workflow="simple", run_uid="54321", target_folder="/tmp", filePath="/dev/null"
+    )
+
+
+@pytest.mark.asyncio
+async def test_emits_event(websocket, mocker, prefect_server):
+    client, server = websocket
+    api = mocker.AsyncMock()
+    api.username = "s255idzuser"
+    api.experiment.return_value = Experiment(
+        name="cabana-2026-C3",
+        id="12345",
+        primaryStorage={"name": "", "id": 0},
+        experimentStation={"name": "", "id": 0},
+        experimentType={"name": "", "id": 0},
+        createDate=dt.datetime.now(),
+        updateDate=dt.datetime.now(),
+        startDate=dt.datetime.now(),
+        endDate=dt.datetime.now(),
+        dataDirectory="/tmp",
+    )
+    (connection,) = server.connections
+    dispatched = asyncio.create_task(
+        dispatch_new_runs(websocket=client, dm_apis={"255IDZ": api})
+    )
+    # First check that we don't do anything unless there's a stop document
+    events_client = events.clients.PrefectServerEventsClient()
+    await connection.send(
+        json.dumps(
+            {
+                "type": "container-child-metadata-updated",
+                "key": "ABC123",
+                "specs": [],
+                "metadata": {"start": {}},
+            }
+        )
+    )
+
+    await asyncio.sleep(0.01)
+    assert not api.send.called
+    # Handler to listen for new events
+    trigger = DeploymentEventTrigger(
+        expect={"bluesky.run.success"},
+    )
+    print(dir(events_client))
+    print(events.clients)
+    print(dir(events))
+    assert False
+    # Now check that we emit the correct event when created
+    await connection.send(
+        json.dumps(
+            {
+                "type": "container-child-metadata-updated",
+                "key": "ABC123",
+                "specs": [],
+                "metadata": {
+                    "start": {
+                        "uid": "54321",
+                        "dm_exp": "cabana-2026-C3",
+                        "dm_station_name": "255IDZ",
+                    },
+                    "stop": {"exit_status": "success"},
+                },
+            }
+        )
     )
 
 

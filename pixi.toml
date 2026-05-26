@@ -14,7 +14,7 @@ postgresql = ">=18.4,<19"
 
 [pypi-dependencies]
 oaty-bar = { path = ".", editable = true }
-tiled = { version = "==0.2.10-rc2, <0.3", extras = ["all"] }
+tiled = { version = ">=0.2.10, <0.3", extras = ["all"] }
 h5py = ">=3.16.0, <4"
 hdf5plugin = ">=6.0.0, <7"
 bluesky-tiled-plugins = ">=2.0.2, <3"

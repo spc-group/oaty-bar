@@ -71,9 +71,9 @@ def main(argv: Sequence[str] | None = None):
         prog="export-run",
         description="A prefect flow that exports files for a given Bluesky run",
     )
-    parser.add_argument("uid", help="The UID of the bluesky run to export.")
+    parser.add_argument("--uid", help="The UID of the bluesky run to export.",         )
     parser.add_argument(
-        "target_dir", help="The DM directory to receive the exported file."
+        "--target_dir", help="The DM directory to receive the exported file.",         
     )
     parser.add_argument(
         "--raw-profile", help="The name of the Tiled profile used for raw runs."

@@ -14,8 +14,8 @@ def xafs_run():
 
 @pytest.fixture(autouse=True, scope="session")
 def prefect_server():
-    with prefect_test_harness():
-        yield
+    with prefect_test_harness() as server:
+        yield server
 
 
 @pytest.fixture()

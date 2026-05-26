@@ -18,26 +18,45 @@ push: null
 # pull section allows you to provide instructions for cloning
 # this project in remote locations
 pull:
-- prefect.deployments.steps.git_clone:
-    repository: git@github.com:spc-group/oaty-bar.git
-    branch: main
+- prefect.deployments.steps.set_working_directory:
+    directory: /home/mwolf/src/oaty-bar
 
 # the deployments section allows you to provide configuration
 # for deploying flows
 deployments:
-- name: backup
-  version: null
+- name: export
+  version: "1"
   tags: []
-  concurrency_limit: null
-  description: null
-  entrypoint: src/oaty_bar/workflows/backup_database.py:main
+  description: "Export files for runs from Tiled."
+  schedule: {}
+  flow_name: "export-run"
+  entrypoint: "src/oaty_bar/_export_run.py:export_run"
   parameters: {}
   work_pool:
-    name: dev
+    name: "gdata"
     work_queue_name: null
     job_variables: {}
-  schedules:
-  - cron: 0 0 * * *
-    timezone: America/Chicago
-    day_or: true
-    active: true
+- name: fit-xrf
+  version: "1"
+  tags: []
+  description: "Fit fluorescence data from Bluesky runs."
+  schedule: {}
+  flow_name: "fit-fluorescence"
+  entrypoint: "src/oaty_bar/_fit_fluorescence.py:fit_fluorescence"
+  parameters: {}
+  work_pool:
+    name: "compute"
+    work_queue_name: null
+    job_variables: {}
+- name: backup-databases
+  version: "1"
+  tags: []
+  description: "Dump critical databases from SQL to disk."
+  schedule: {}
+  flow_name: "backup-databases"
+  entrypoint: "src/oaty_bar/_backup_databases.py:backup_databases"
+  parameters: {}
+  work_pool:
+    name: "gdata"
+    work_queue_name: null
+    job_variables: {}
