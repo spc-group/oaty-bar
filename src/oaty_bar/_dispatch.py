@@ -12,7 +12,6 @@ from prefect.events import emit_event
 from tiled.client import from_profile
 from tiled.profiles import get_default_profile_name
 
-from ._config import OatyBarConfig, load_config
 from .workflows import load_workflow
 
 log = logging.getLogger("oaty-bar")
@@ -55,18 +54,6 @@ async def dispatch_new_runs(
             continue
 
 
-def websockets_uri(tiled_profile: str) -> ClientConnection:
-    if not tiled_profile:
-        tiled_profile = get_default_profile_name()
-    tiled_client = from_profile(tiled_profile)
-    api_uri, _ = tiled_client.uri.split("/api/v1/")
-    path = "/".join(tiled_client.path_parts)
-    ws_uri = f"{api_uri}/api/v1/stream/single/{path}"
-    scheme, rest = ws_uri.split("://")
-    ws_uri = f"{scheme.replace('http', 'ws')}://{rest}"
-    return ws_uri
-
-
 async def run_dispatcher(*, tiled_profile: str = "", config_file: Path | None = None):
     """Run the dispatcher in a continuous loop as defined in *config_file*.
 
@@ -75,7 +62,16 @@ async def run_dispatcher(*, tiled_profile: str = "", config_file: Path | None = 
 
     """
     instance_uuid = uuid.uuid4()
-    ws_uri = websockets_uri(tiled_profile)
+    # Extract the websocket URI from the Tiled profile info
+    if not tiled_profile:
+        tiled_profile = get_default_profile_name()
+    tiled_client = from_profile(tiled_profile)
+    api_uri, _ = tiled_client.uri.split("/api/v1/")
+    path = "/".join(tiled_client.path_parts)
+    ws_uri = f"{api_uri}/api/v1/stream/single/{path}"
+    scheme, rest = ws_uri.split("://")
+    ws_uri = f"{scheme.replace('http', 'ws')}://{rest}"
+    # Launch the websocket loop
     async with connect(ws_uri) as websocket:
         log.info(f"Listening for new runs on {ws_uri}")
         await dispatch_new_runs(websocket)

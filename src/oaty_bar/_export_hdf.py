@@ -543,9 +543,9 @@ def build_file_name(metadata: Mapping[str, Any]) -> str:
 @flow()
 def export_hdf(
     uid: str,
-    target_dir: str,
     *,
-    raw_profile: str,
+    raw_profile: str = "",
+    target_dir: str = "",
     results_profile: str | None = None,
     force: bool = False,
     semaphore: asyncio.Semaphore | None = None,
@@ -558,14 +558,22 @@ def export_hdf(
     exists in *target_dir*, this operation will fail unless *force* is
     True, in which case the existing HDF file will be overwritten.
 
+    If *target_dir* is not provided, a default destination for the new
+    file will be determined from the corresponding DM experiment
+    metadata, whose credentials are stored in the block
+    "aps-dm-environments".
+
     Parameters
     ==========
     uid
       The UID of the Bluesky run to read from in the Tiled catalog.
     target_dir
-      An existing folder in which to create a new HDF5 file.
+      An existing folder in which to create a new HDF5 file. If
+      omitted, a default location will be used.
     raw_profile
-      The name of the Tiled profile to use for reading Bluesky runs.
+      The name of the Tiled profile to use for reading Bluesky
+      runs. If an empty string (default), the default Tiled profile
+      will be used.
     results_profile
       The name of the Tiled profile to use for reading processed
       results data.
@@ -574,7 +582,6 @@ def export_hdf(
       omitted, a default will be created.
 
     """
-    target_dir_ = Path(target_dir)
     if semaphore is None:
         semaphore = asyncio.Semaphore(10)
     raw_catalog = from_profile(raw_profile)
@@ -584,6 +591,12 @@ def export_hdf(
         results_runs = results_catalog.search(Eq("run_uid", uid))
     else:
         results_runs = None
+    # DM experiments contain the export path, which is our default
+    if not target_dir:
+        dmax_client = load_client(run.metadata['start']['dm_station_name'])
+        dm_exp = dmax_client.experiment(name=run.metadata['start']['dm_exp'])
+        target_dir = dm_exp.data_path
+    target_dir_ = Path(target_dir)
     target_file = target_dir_ / build_file_name(run.metadata)
     asyncio.run(
         serialize_hdf(

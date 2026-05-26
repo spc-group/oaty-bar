@@ -1,7 +1,7 @@
 from oaty_bar._export_run import main
 
 
-def test_export_hdf(tmp_path, xafs_run, mocker, prefect_server):
+def test_export_run(tmp_path, xafs_run, mocker, prefect_server):
     from_profile = mocker.MagicMock(
         return_value={
             "123-45-67890": xafs_run,
@@ -12,7 +12,9 @@ def test_export_hdf(tmp_path, xafs_run, mocker, prefect_server):
     # Wrap in a flow to make prefect happy
     main(
         [
+            "--uid",
             "123-45-67890",
+            "--target_dir",
             str(tmp_path),
             "--raw-profile",
             "raw_catalog",

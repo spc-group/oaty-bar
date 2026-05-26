@@ -44,7 +44,6 @@ async def export_run(
       omitted, a default will be created.
 
     """
-    target_dir_ = Path(target_dir)
     if semaphore is None:
         semaphore = asyncio.Semaphore(10)
     raw_catalog = from_profile(raw_profile)
@@ -54,6 +53,12 @@ async def export_run(
         results_runs = results_catalog.search(Eq("run_uid", uid))
     else:
         results_runs = None
+    # DM experiments contain the export path, which is our default
+    if not target_dir:
+        dmax_client = load_client(run.metadata['start']['dm_station_name'])
+        dm_exp = dmax_client.experiment(name=run.metadata['start']['dm_exp'])
+        target_dir = dm_exp.data_path
+    target_dir_ = Path(target_dir)
     target_file = target_dir_ / build_file_name(run.metadata)
     await serialize_hdf(
         buff=target_file,
@@ -71,7 +76,7 @@ def main(argv: Sequence[str] | None = None):
         prog="export-run",
         description="A prefect flow that exports files for a given Bluesky run",
     )
-    parser.add_argument("--uid", help="The UID of the bluesky run to export.",         )
+    parser.add_argument("--uid", help="The UID of the bluesky run to export.",)
     parser.add_argument(
         "--target_dir", help="The DM directory to receive the exported file.",         
     )

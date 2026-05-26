@@ -12,7 +12,7 @@ from websockets.asyncio.server import serve
 from prefect.events.schemas.deployment_triggers import DeploymentEventTrigger
 from prefect import events
 
-from oaty_bar._dispatch import OatyBarConfig, dispatch_new_runs, load_dm_apis
+from oaty_bar._dispatch import dispatch_new_runs
 from oaty_bar.workflows import Workflow
 
 WS_HOST = "127.0.0.1"
@@ -66,7 +66,7 @@ async def test_handle_message(websocket, mocker):
     )
     (connection,) = server.connections
     dispatched = asyncio.create_task(
-        dispatch_new_runs(websocket=client, dm_apis={"255IDZ": api})
+        dispatch_new_runs(websocket=client)
     )
     # First check that we don't do anything unless there's a stop document
     await connection.send(
@@ -125,7 +125,7 @@ async def test_emits_event(websocket, mocker, prefect_server):
     )
     (connection,) = server.connections
     dispatched = asyncio.create_task(
-        dispatch_new_runs(websocket=client, dm_apis={"255IDZ": api})
+        dispatch_new_runs(websocket=client)
     )
     # First check that we don't do anything unless there's a stop document
     events_client = events.clients.PrefectServerEventsClient()
@@ -170,28 +170,6 @@ async def test_emits_event(websocket, mocker, prefect_server):
     )
 
 
-config_toml = """
-[tiled]
-websocket_uri = "ws://localhost:8020"
-
-[ data_management_stations.255IDZ ]
-username = "cleese"
-password = "secret"
-station_name = "255IDZ"
-"""
-
-
-async def test_load_dm_apis(tmp_path):
-    toml_file = tmp_path / "oaty_bar_config.toml"
-    with open(toml_file, mode="a+") as fd:
-        fd.write(config_toml)
-    with open(toml_file, mode="rb") as fd:
-        cfg_dict = tomllib.load(fd)
-    config = OatyBarConfig(**cfg_dict)
-    dm_apis = load_dm_apis(config)
-    assert "255IDZ" in dm_apis
-
-
 @pytest.mark.asyncio
 async def test_add_workflow(websocket, mocker):
     """Adds a new workflow if the requested workflow doesn't exist."""
@@ -213,7 +191,7 @@ async def test_add_workflow(websocket, mocker):
     api.workflows.return_value = []
     (connection,) = server.connections
     dispatched = asyncio.create_task(
-        dispatch_new_runs(websocket=client, dm_apis={"255IDZ": api})
+        dispatch_new_runs(websocket=client)
     )
     # Now check that we start a new workflow of some sort
     await connection.send(
@@ -268,7 +246,7 @@ async def test_update_workflow(websocket, mocker):
     ]
     (connection,) = server.connections
     dispatched = asyncio.create_task(
-        dispatch_new_runs(websocket=client, dm_apis={"255IDZ": api})
+        dispatch_new_runs(websocket=client)
     )
     # Now check that we start a new workflow of some sort
     await connection.send(
