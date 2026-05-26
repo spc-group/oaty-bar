@@ -24,21 +24,21 @@ async def process_msg(msg: str, instance_uuid: str):
         # Not a message we can process, so skip it for now
         return
     metadata = payload.get("metadata", {})
-    uid = metadata.get("start", {}).get("uid", "<unknown UID>")
+    uid = metadata.get("start", {}).get("uid", "")
     # Guards to make sure we have all the right metadata to proceed
     if "stop" not in metadata:
         # Run is not finished yet, so ignore it for now
-        log.debug(f"Run `{uid}` is not finished, skipping.")
+        log.debug(f"Run `{uid or '<unknown UID>'}` is not finished, skipping.")
         return
     # Create a prefect event so it can be routed to the correct workflows
     resource = {
         "prefect.resource.id": f"oaty-bar.dispatcher.{instance_uuid}",
-        "run_uid": metadata.get('start', {}).get('uid', ""),
+        "run_uid": uid,
     }
     log.info(f"Emitting events for resource: {resource}")
-    emit_event("tiled.run.stopped", resource=resource)
+    emit_event("bluesky.run.stopped", resource=resource)
     if exit_status := metadata.get("stop", {}).get("exit_status"):
-        emit_event(f"tiled.run.{exit_status}", resource=resource)
+        emit_event(f"bluesky.run.{exit_status}", resource=resource)
 
 
 async def dispatch_new_runs(
