@@ -9,14 +9,16 @@ from tiled.profiles import get_default_profile_name
 from tiled.queries import Eq
 
 from ._export_hdf import build_file_name, serialize_hdf
+from ._data_management import load_client
 
 
 @flow()
 async def export_run(
     uid: str,
-    target_dir: str,
-    raw_profile: str = get_default_profile_name(),
-    results_profile: str = get_default_profile_name(),
+    *,
+    target_dir: str = "",
+    raw_profile: str = "oaty-bar",
+    results_profile: str = "oaty-bar-results",
     force: bool = False,
     semaphore: asyncio.Semaphore | None = None,
 ):
@@ -30,7 +32,7 @@ async def export_run(
 
     Parameters
     ==========
-    uid
+    run_uid
       The UID of the Bluesky run to read from in the Tiled catalog.
     target_dir
       An existing folder in which to create a new HDF5 file.
@@ -44,20 +46,25 @@ async def export_run(
       omitted, a default will be created.
 
     """
+    run_uid = uid
     if semaphore is None:
         semaphore = asyncio.Semaphore(10)
     raw_catalog = from_profile(raw_profile)
-    run = raw_catalog[uid]
+    run = raw_catalog[run_uid]
     if results_profile:
         results_catalog = from_profile(results_profile)
-        results_runs = results_catalog.search(Eq("run_uid", uid))
+        results_runs = results_catalog.search(Eq("run_uid", run_uid))
     else:
         results_runs = None
     # DM experiments contain the export path, which is our default
     if not target_dir:
-        dmax_client = load_client(run.metadata['start']['dm_station_name'])
-        dm_exp = dmax_client.experiment(name=run.metadata['start']['dm_exp'])
-        target_dir = dm_exp.data_path
+        beamline_id = run.metadata['start']['beamline_id']
+        exp_name = run.metadata['start']['dm_exp']
+        target_dir = Path("/net/s25data/export") / beamline_id / exp_name
+        target_dir.mkdir(exist_ok=True, parents=False)
+        # dmax_client = await load_client(run.metadata['start']['dm_station_name'], asyncio=True)
+        # dm_exp = await dmax_client.experiment(name=run.metadata['start']['dm_exp'])
+        # target_dir = dm_exp.data_path
     target_dir_ = Path(target_dir)
     target_file = target_dir_ / build_file_name(run.metadata)
     await serialize_hdf(
@@ -118,7 +125,7 @@ def main(argv: Sequence[str] | None = None):
         semaphore = asyncio.Semaphore(args.max_workers)
         asyncio.run(
             export_run(
-                uid=args.uid,
+                run_uid=args.uid,
                 target_dir=args.target_dir,
                 force=args.force,
                 raw_profile=args.raw_profile or "",

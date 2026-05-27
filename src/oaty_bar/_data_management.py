@@ -48,9 +48,10 @@ class DataManagementStation(Block):
     processing_uri: str = ""
 
 
-def load_client(station_name: str) -> dmax.Client:
-    creds = DataManagementStation.load(station_name.lower())
-    client = dmax.Client(
+async def load_client(station_name: str, asyncio=True) -> dmax.Client:
+    creds = await DataManagementStation.load(station_name.lower())
+    Client = dmax.AsyncClient if asyncio else dmax.Client
+    client = Client(
         username=creds.username,
         password=creds.password.get_secret_value(),
         station_name=creds.station_name,

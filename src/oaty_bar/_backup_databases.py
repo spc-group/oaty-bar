@@ -1,24 +1,33 @@
 """A prefect flow for backing up databases e.g. the Bluesky catalog of runs."""
 
 import asyncio
+import argparse
 import datetime as dt
 import os
 from pathlib import Path
 
 from prefect import flow, task
+from prefect.schedules import Cron
 from prefect.logging import get_run_logger
 from prefect.variables import Variable
 from prefect_sqlalchemy import AsyncSqlAlchemyConnector
+from prefect.artifacts import create_link_artifact
 
 
-@task()
+@task(
+    task_run_name="dump-{name}",
+    persist_result=True,
+)
 async def dump_postgres(
-    username: str,
-    password: str,
-    host: str,
-    port: str,
-    database: str,
+        name: str
 ) -> Path:
+    """Create a dumped directory of the postgres database."""
+    # Database connection info is stored in prefect blocks for security
+    database_block = await AsyncSqlAlchemyConnector.load(name)
+    connection = database_block.connection_info
+    database = connection.database
+    host = connection.host
+    port = connection.port
     # Decide where to store the backup
     log = get_run_logger()
     root_dir = await Variable.get("database-backup-path")
@@ -27,7 +36,8 @@ async def dump_postgres(
     root_dir = Path(root_dir)
     now = dt.datetime.now()
     target_dir = root_dir / f"{database}-{now.strftime('%Y-%m-%d-%H-%M')}"
-    log.info(f"Backing up postgres server at '{host}:{port}/{database}'.")
+    db_uri = f"{host}:{port}/{database}"
+    log.info(f"Backing up postgres server at '{db_uri}'.")
     log.info(f"Saving to folder: '{target_dir}'.")
     # Perform the backup
     args = [
@@ -39,7 +49,7 @@ async def dump_postgres(
         "--port",
         str(port),
         "--username",
-        username,
+        connection.username,
         "--format",
         "d",
         "--file",
@@ -48,25 +58,40 @@ async def dump_postgres(
         "8",
     ]
     proc = await asyncio.create_subprocess_shell(
-        " ".join(args), env={**os.environ, "PGPASSWORD": password}
+        " ".join(args), env={**os.environ, "PGPASSWORD": connection.password.get_secret_value()},
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-    await proc.communicate()
+    stdout, stderr = await proc.communicate()
+    # Raise an exception so the flow fails
+    log.info(f"Dump of {db_uri} ended with exit code {proc.returncode}.")
+    log.debug(stdout.decode())
+    if proc.returncode == 0:
+        if err := stderr.decode():
+            log.error(err)
+    else:
+        raise RuntimeError(stderr.decode())
+    # Inform prefect of the newly created folder
+    await create_link_artifact(
+        key=f"backup-{database}-folder",
+        link=f"file://{target_dir}",
+        description=f"# Backup folder of {database}\n\n{now.strftime('%Y-%m-%d %H:%M')}\n\nBackup of '{db_uri}'.",
+    )
     return target_dir
 
 
-@task()
+@task(task_run_name="restore-{backup_dir.name}")
 async def restore_backup(backup_dir: Path):
     log = get_run_logger()
     log.critical(f"Not restoring backup from {backup_dir}")
 
 
-@task()
+@task(task_run_name="verify-{backup_dir.name}")
 async def verify_backup(backup_dir: Path):
     log = get_run_logger()
     log.critical(f"Not verifying backup from {backup_dir}")
 
 
-@flow()
 async def backup_database(name: str):
     """Backup and verify a single database.
 
@@ -74,30 +99,14 @@ async def backup_database(name: str):
     backup.
 
     """
-    database_block = await AsyncSqlAlchemyConnector.load(name)
-    connection = database_block.connection_info
-    backup_dir = await dump_postgres(
-        username=connection.username,
-        password=connection.password.get_secret_value(),
-        host=connection.host,
-        port=connection.port,
-        database=connection.database,
-    )
+    backup_dir = await dump_postgres(name)
     await restore_backup(backup_dir)
     await verify_backup(backup_dir)
 
 
 @flow()
 async def backup_databases():
-    """Backup several databases to local storage and confirm their validity.
-
-    Parameters
-    ==========
-    uri
-      The URI for the postgres
-      database. E.g. "postgres://<user>:<password>@host:port".
-
-    """
+    """Backup several databases to local storage and confirm their validity."""
     results = await asyncio.gather(
         backup_database("bluesky-catalog"),
         backup_database("bluesky-storage"),
@@ -109,8 +118,19 @@ async def backup_databases():
         raise ExceptionGroup("Database backup failed", exceptions)
 
 
-def main():
-    asyncio.run(backup_databases())
-    # backup_bluesky_catalog.serve(
-    #     interval=60
-    # )
+def main(argv=None):
+    "Entry point for run database backups in Prefect."
+    parser = argparse.ArgumentParser(
+        prog="backup-databases",
+        description="A Prefect flow to backup databases and verify the backup is restorable.",
+    )
+    parser.add_argument(
+        "--deploy",
+        help="Deploy this flow to run every Monday instead of executing it immediately.", action="store_true")
+    args = parser.parse_args(argv)
+    if args.deploy:
+        backup_databases.serve(
+            schedule=Cron("15 8 * * MON", timezone="America/Chicago"),
+        )
+    else:
+        asyncio.run(backup_databases())

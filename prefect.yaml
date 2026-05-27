@@ -19,7 +19,7 @@ push: null
 # this project in remote locations
 pull:
 - prefect.deployments.steps.set_working_directory:
-    directory: /home/mwolf/src/oaty-bar
+    directory: "{{ $HOME }}/src/oaty-bar"
 
 # the deployments section allows you to provide configuration
 # for deploying flows

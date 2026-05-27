@@ -10,13 +10,15 @@ from typing import IO, Any
 
 import h5py
 import numpy as np
-from prefect import flow
+from prefect import flow, task
 from tiled.client import from_profile
 from tiled.client.container import Container
 from tiled.client.dataframe import DataFrameClient
 from tiled.queries import Eq
 from tiled.server.schemas import DataSource
 from tiled.utils import SerializationError
+from prefect.artifacts import create_link_artifact
+from prefect.logging import get_run_logger
 
 log = logging.getLogger("oaty-bar")
 
@@ -487,6 +489,7 @@ async def write_event_stream(
     return stream_group
 
 
+@task()
 async def serialize_hdf(
     buff: IO[bytes] | Path,
     run: Container,
@@ -500,10 +503,18 @@ async def serialize_hdf(
     Follows the NeXuS XAS spectroscopy definition.
 
     """
+    log = get_run_logger()
     if isinstance(buff, BytesIO):
         buff.seek(0)
     h5_mode = "w" if force else "x"
+    log.info(f"Opening file '{buff}', in mode '{h5_mode}'")
     with h5py.File(buff, mode=h5_mode) as nxfile:
+        uid = run.metadata.get("start", {}).get("uid", "")
+        await create_link_artifact(
+                key=f"export-{uid or '<Unknown UID>'}-hdf",
+                link=f"file://{nxfile.filename}",
+                description=f"# Exported HDF5 File\n\nRun UID: '{uid}'.\n",
+            )
         # Write data entry to the nexus file
         entry = await write_run(
             nxfile=nxfile, run=run, force=force, semaphore=semaphore
@@ -607,3 +618,4 @@ def export_hdf(
             semaphore=semaphore,
         )
     )
+

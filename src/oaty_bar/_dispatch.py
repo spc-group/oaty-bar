@@ -36,9 +36,9 @@ async def process_msg(msg: str, instance_uuid: str):
         "run_uid": uid,
     }
     log.info(f"Emitting events for resource: {resource}")
-    emit_event("bluesky.run.stopped", resource=resource)
+    emit_event("bluesky.run.stopped", resource=resource, payload=payload)
     if exit_status := metadata.get("stop", {}).get("exit_status"):
-        emit_event(f"bluesky.run.{exit_status}", resource=resource)
+        emit_event(f"bluesk.run.{exit_status}", resource=resource, payload=payload)
 
 
 async def dispatch_new_runs(

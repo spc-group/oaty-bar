@@ -10,7 +10,8 @@ prefect-server = "prefect server start"
 
 [dependencies]
 python = ">=3.14.4,<3.15"
-postgresql = ">=18.4,<19"
+postgresql = ">=17.0,<18"
+valkey-server = ">=9.1.0,<10"
 
 [pypi-dependencies]
 oaty-bar = { path = ".", editable = true }
@@ -27,7 +28,7 @@ pybaselines = ">=1.2.1, <2"
 pint = ">=0.25.3, <0.26"
 # dmax  = { path = "../dmax", editable = true }
 dmax = ">=0.0.8, <0.1.0"
-prefect = { version = ">=3.7.1, <4", extras = ["sqlalchemy"] }
+prefect = { version = ">=3.7.1, <4", extras = ["sqlalchemy", "slack"] }
 platformdirs = ">=4.9.6, <5"
 
 [environments]
