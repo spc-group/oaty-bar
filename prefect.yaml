@@ -24,8 +24,20 @@ pull:
 # the deployments section allows you to provide configuration
 # for deploying flows
 deployments:
-- name: export
+- name: process-run
   version: "1"
+  tags: []
+  description: "Process a raw Bluesky run in Tiled (e.g. fit flourescence, etc.)."
+  schedule: {}
+  flow_name: "process-run"
+  entrypoint: "src/oaty_bar/_process_run.py:process_run"
+  parameters: {}
+  work_pool:
+    name: "compute"
+    work_queue_name: null
+    job_variables: {}
+- name: export
+  version: "2"
   tags: []
   description: "Export files for runs from Tiled."
   schedule: {}

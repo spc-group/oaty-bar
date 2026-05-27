@@ -199,7 +199,6 @@ async def fit_frame(
     return results
 
 
-@task()
 async def fit_array(
     node: ArrayClient,
     energies,
@@ -290,7 +289,7 @@ async def fit_fluorescence(
     run_uid: str,
     raw_profile: str,
     results_profile: str,
-    max_workers: int | None,
+    max_workers: int | None = None,
 ):
     # Load the necessary Tiled catalogs
     raw_catalog = from_profile(raw_profile)
@@ -301,7 +300,6 @@ async def fit_fluorescence(
     )
 
 
-@task()
 async def fit_run_fluorescence(
     run: Container, results_catalog: Container, max_workers=None
 ):
@@ -350,9 +348,11 @@ async def fit_run_fluorescence(
                 )
                 # Let prefect know what assets we expect to produce
                 expected_table_uri = f"{results_run.uri}/{source_node.path_parts[-1]}-fit"
+                node_name = source_node.path_parts[-1]
                 coro = materialize(
                     expected_table_uri,
-                    asset_deps=[source_node.uri]
+                    asset_deps=[source_node.uri],
+                    task_run_name=f"fit-xrf-{node_name}",
                 )(fit_array)(
                     source_node,
                     energies,
