@@ -14,6 +14,7 @@ from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
 from pint import Quantity, UnitRegistry
 from prefect import flow, task
+from prefect.assets import materialize
 from pybaselines import Baseline
 from tiled.client import from_profile
 from tiled.client.array import ArrayClient
@@ -198,6 +199,7 @@ async def fit_frame(
     return results
 
 
+@task()
 async def fit_array(
     node: ArrayClient,
     energies,
@@ -346,7 +348,12 @@ async def fit_run_fluorescence(
                     if energy_signal in stream.keys()
                     else baseline_energies
                 )
-                coro = fit_array(
+                # Let prefect know what assets we expect to produce
+                expected_table_uri = f"{results_run.uri}/{source_node.path_parts[-1]}-fit"
+                coro = materialize(
+                    expected_table_uri,
+                    asset_deps=[source_node.uri]
+                )(fit_array)(
                     source_node,
                     energies,
                     results_node=results_run,

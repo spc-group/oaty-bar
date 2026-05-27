@@ -9,12 +9,11 @@ from tiled.profiles import get_default_profile_name
 from tiled.queries import Eq
 
 from ._export_hdf import build_file_name, serialize_hdf
-from ._data_management import load_client
 
 
 @flow()
 async def export_run(
-    uid: str,
+    run_uid: str,
     *,
     target_dir: str = "",
     raw_profile: str = "oaty-bar",
@@ -46,7 +45,6 @@ async def export_run(
       omitted, a default will be created.
 
     """
-    run_uid = uid
     if semaphore is None:
         semaphore = asyncio.Semaphore(10)
     raw_catalog = from_profile(raw_profile)

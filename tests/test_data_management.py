@@ -1,13 +1,16 @@
+import pytest
+
 from oaty_bar._data_management import load_client, DataManagementStation
 
 
-def test_dm_client(prefect_server):
+@pytest.mark.asyncio
+async def test_dm_client(prefect_server):
     """Do we build a DM client from the prefect variable."""
     station = DataManagementStation(
         username="monty", password="secret", station_name="255IDZ", scheduling_uri="blah", data_storage_uri="spam", processing_uri="eggs"
     )
-    station.save("255idz")
-    client = load_client(station_name="255IDZ")
+    await station.save("255idz")
+    client = await load_client(station_name="255IDZ")
     assert client.username == "monty"
     assert client.password == "secret"
     assert client.station_name == "255IDZ"

@@ -5,6 +5,7 @@ import chemformula
 import numpy as np
 import pytest
 from prefect import flow
+from prefect import assets
 from tiled.adapters.mapping import MapAdapter
 from tiled.client import Context, from_context
 from tiled.server.app import build_app
