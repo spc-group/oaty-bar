@@ -2,9 +2,10 @@
 
 import asyncio
 
-from prefect import flow, task
+from prefect import flow
+from tiled.client import from_profile
 
-from ._fit_fluorescence import fit_fluorescence
+from ._fit_fluorescence import fit_run_fluorescence
 
 @flow()
 async def process_run(run_uid: str, raw_profile: str = "oaty-bar", results_profile: str = "oaty-bar-results"):
@@ -22,11 +23,13 @@ async def process_run(run_uid: str, raw_profile: str = "oaty-bar", results_profi
       results.
 
     """
+    # Load the necessary Tiled catalogs
+    raw_catalog = from_profile(raw_profile)
+    run = raw_catalog[run_uid]
+    results_catalog = from_profile(results_profile)
     results = await asyncio.gather(
-        fit_fluorescence(
-            run_uid=run_uid,
-            raw_profile=raw_profile,
-            results_profile=results_profile
+        fit_run_fluorescence(
+            run=run, results_catalog=results_catalog
         ),
         return_exceptions=True,
     )

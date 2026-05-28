@@ -1,7 +1,6 @@
 import asyncio
 import datetime as dt
 import json
-import tomllib
 import urllib
 
 import pytest

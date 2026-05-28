@@ -3,16 +3,14 @@ import argparse
 import asyncio
 import json
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
-import httpx
 from websockets.asyncio.client import ClientConnection, connect
 from prefect.events import emit_event
 from tiled.client import from_profile
 from tiled.profiles import get_default_profile_name
 
-from .workflows import load_workflow
 
 log = logging.getLogger("oaty-bar")
 
@@ -38,7 +36,7 @@ async def process_msg(msg: str, instance_uuid: str):
     log.info(f"Emitting events for resource: {resource}")
     emit_event("bluesky.run.stopped", resource=resource, payload=payload)
     if exit_status := metadata.get("stop", {}).get("exit_status"):
-        emit_event(f"bluesk.run.{exit_status}", resource=resource, payload=payload)
+        emit_event(f"bluesky.run.{exit_status}", resource=resource, payload=payload)
 
 
 async def dispatch_new_runs(

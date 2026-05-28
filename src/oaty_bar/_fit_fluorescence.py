@@ -13,7 +13,7 @@ from chemformula import ChemFormula
 from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
 from pint import Quantity, UnitRegistry
-from prefect import flow, task
+from prefect import flow
 from prefect.assets import materialize
 from pybaselines import Baseline
 from tiled.client import from_profile

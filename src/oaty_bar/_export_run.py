@@ -8,7 +8,6 @@ from pathlib import Path
 
 from prefect import flow
 from tiled.client import from_profile
-from tiled.profiles import get_default_profile_name
 from tiled.queries import Eq
 
 from ._export_hdf import build_file_name, serialize_hdf
