@@ -11,14 +11,14 @@ from typing import IO, Any
 import h5py
 import numpy as np
 from prefect import flow, task
+from prefect.artifacts import create_link_artifact
+from prefect.logging import get_run_logger
 from tiled.client import from_profile
 from tiled.client.container import Container
 from tiled.client.dataframe import DataFrameClient
 from tiled.queries import Eq
 from tiled.server.schemas import DataSource
 from tiled.utils import SerializationError
-from prefect.artifacts import create_link_artifact
-from prefect.logging import get_run_logger
 
 log = logging.getLogger("oaty-bar")
 
@@ -511,10 +511,10 @@ async def serialize_hdf(
     with h5py.File(buff, mode=h5_mode) as nxfile:
         uid = run.metadata.get("start", {}).get("uid", "")
         await create_link_artifact(
-                key=f"export-{uid or '<Unknown UID>'}-hdf",
-                link=f"file://{nxfile.filename}",
-                description=f"# Exported HDF5 File\n\nRun UID: '{uid}'.\n",
-            )
+            key=f"export-{uid or '<Unknown UID>'}-hdf",
+            link=f"file://{nxfile.filename}",
+            description=f"# Exported HDF5 File\n\nRun UID: '{uid}'.\n",
+        )
         # Write data entry to the nexus file
         entry = await write_run(
             nxfile=nxfile, run=run, force=force, semaphore=semaphore
@@ -529,7 +529,7 @@ async def serialize_hdf(
             tasks = [tg.create_task(coro) for coro in coros]
 
 
-def build_file_name(metadata: Mapping[str, Any]) -> str:
+def build_file_name(metadata: Mapping[str, Any], extension=".hdf") -> str:
     """Build the name of the target HDF5 file based on metadata."""
     start_doc = metadata.get("start", {})
     start_time = dt.datetime.fromtimestamp(start_doc.get("time", 0))
@@ -548,7 +548,7 @@ def build_file_name(metadata: Mapping[str, Any]) -> str:
     base_name = "-".join(bits)
     base_name = re.sub(r"[ ]", "_", base_name)
     base_name = re.sub(r"[/]", "", base_name)
-    return f"{base_name}.h5"
+    return f"{base_name}{extension}"
 
 
 @flow()
@@ -604,9 +604,13 @@ def export_hdf(
         results_runs = None
     # DM experiments contain the export path, which is our default
     if not target_dir:
-        dmax_client = load_client(run.metadata['start']['dm_station_name'])
-        dm_exp = dmax_client.experiment(name=run.metadata['start']['dm_exp'])
-        target_dir = dm_exp.data_path
+        beamline_id = run.metadata["start"]["beamline_id"]
+        exp_name = run.metadata["start"]["dm_exp"]
+        target_dir = Path("/net/s25data/export") / beamline_id / exp_name
+        target_dir.mkdir(exist_ok=True, parents=False)
+        # dmax_client = load_client(run.metadata['start']['dm_station_name'])
+        # dm_exp = dmax_client.experiment(name=run.metadata['start']['dm_exp'])
+        # target_dir = dm_exp.data_path
     target_dir_ = Path(target_dir)
     target_file = target_dir_ / build_file_name(run.metadata)
     asyncio.run(
@@ -618,4 +622,3 @@ def export_hdf(
             semaphore=semaphore,
         )
     )
-

@@ -347,7 +347,9 @@ async def fit_run_fluorescence(
                     else baseline_energies
                 )
                 # Let prefect know what assets we expect to produce
-                expected_table_uri = f"{results_run.uri}/{source_node.path_parts[-1]}-fit"
+                expected_table_uri = (
+                    f"{results_run.uri}/{source_node.path_parts[-1]}-fit"
+                )
                 node_name = source_node.path_parts[-1]
                 coro = materialize(
                     expected_table_uri,

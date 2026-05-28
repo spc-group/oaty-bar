@@ -21,6 +21,10 @@ xafs_run_metadata = {
         "detectors": ["I0"],
         "hints": {"dimensions": [[["pitch2"], "primary"]]},
         "motors": ["pitch2"],
+        "facility_id": "Advanced Photon Source",
+        "beamline_id": "255-ID-Z",
+        "edge": "Ni-K",
+        "d_spacing": 3.131562,
         "num_intervals": 19,
         "num_points": 20,
         "plan_args": {
@@ -43,7 +47,7 @@ xafs_run_metadata = {
             "num": 20,
             "per_step": "None",
         },
-        "plan_name": "rel_scan",
+        "plan_name": "xafs_scan",
         "plan_pattern": "inner_product",
         "plan_pattern_args": {
             "args": [

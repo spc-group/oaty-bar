@@ -1,6 +1,5 @@
 """A Prefect flow for created exported files from a Tiled Bluesky run."""
 
-
 import argparse
 import asyncio
 from collections.abc import Sequence
@@ -11,6 +10,7 @@ from tiled.client import from_profile
 from tiled.queries import Eq
 
 from ._export_hdf import build_file_name, serialize_hdf
+from ._export_tsv import serialize_tsv
 
 
 @flow()
@@ -58,22 +58,36 @@ async def export_run(
         results_runs = None
     # DM experiments contain the export path, which is our default
     if not target_dir:
-        beamline_id = run.metadata['start']['beamline_id']
-        exp_name = run.metadata['start']['dm_exp']
+        beamline_id = run.metadata["start"]["beamline_id"]
+        exp_name = run.metadata["start"]["dm_exp"]
         target_dir = Path("/net/s25data/export") / beamline_id / exp_name
         target_dir.mkdir(exist_ok=True, parents=False)
         # dmax_client = await load_client(run.metadata['start']['dm_station_name'], asyncio=True)
         # dm_exp = await dmax_client.experiment(name=run.metadata['start']['dm_exp'])
         # target_dir = dm_exp.data_path
     target_dir_ = Path(target_dir)
-    target_file = target_dir_ / build_file_name(run.metadata)
-    await serialize_hdf(
-        buff=target_file,
-        run=run,
-        results_runs=results_runs,
-        force=force,
-        semaphore=semaphore,
+    hdf_file = target_dir_ / build_file_name(run.metadata, extension=".hdf")
+    use_xdi = run.metadata.get("start", {}).get("plan_name") == "xafs_scan"
+    extension = ".xdi" if use_xdi else ".tsv"
+    tsv_file = target_dir_ / build_file_name(run.metadata, extension=extension)
+    results = await asyncio.gather(
+        serialize_hdf(
+            buff=hdf_file,
+            run=run,
+            results_runs=results_runs,
+            force=force,
+            semaphore=semaphore,
+        ),
+        serialize_tsv(
+            buff=tsv_file,
+            run=run,
+            use_xdi=use_xdi,
+        ),
+        return_exceptions=True,
     )
+    exceptions = [exc for exc in results if isinstance(exc, BaseException)]
+    if any(exceptions):
+        raise ExceptionGroup("Export runs failed", exceptions)
 
 
 def main(argv: Sequence[str] | None = None):
@@ -83,9 +97,13 @@ def main(argv: Sequence[str] | None = None):
         prog="export-run",
         description="A prefect flow that exports files for a given Bluesky run",
     )
-    parser.add_argument("--uid", help="The UID of the bluesky run to export.",)
     parser.add_argument(
-        "--target_dir", help="The DM directory to receive the exported file.",         
+        "--uid",
+        help="The UID of the bluesky run to export.",
+    )
+    parser.add_argument(
+        "--target_dir",
+        help="The DM directory to receive the exported file.",
     )
     parser.add_argument(
         "--raw-profile", help="The name of the Tiled profile used for raw runs."

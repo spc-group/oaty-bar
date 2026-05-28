@@ -6,10 +6,10 @@ import urllib
 import pytest
 import pytest_asyncio
 from dmax.data_storage import Experiment
+from prefect import events
+from prefect.events.schemas.deployment_triggers import DeploymentEventTrigger
 from websockets.asyncio.client import connect
 from websockets.asyncio.server import serve
-from prefect.events.schemas.deployment_triggers import DeploymentEventTrigger
-from prefect import events
 
 from oaty_bar._dispatch import dispatch_new_runs
 from oaty_bar.workflows import Workflow
@@ -64,9 +64,7 @@ async def test_handle_message(websocket, mocker):
         dataDirectory="/tmp",
     )
     (connection,) = server.connections
-    dispatched = asyncio.create_task(
-        dispatch_new_runs(websocket=client)
-    )
+    dispatched = asyncio.create_task(dispatch_new_runs(websocket=client))
     # First check that we don't do anything unless there's a stop document
     await connection.send(
         json.dumps(
@@ -123,9 +121,7 @@ async def test_emits_event(websocket, mocker, prefect_server):
         dataDirectory="/tmp",
     )
     (connection,) = server.connections
-    dispatched = asyncio.create_task(
-        dispatch_new_runs(websocket=client)
-    )
+    dispatched = asyncio.create_task(dispatch_new_runs(websocket=client))
     # First check that we don't do anything unless there's a stop document
     events_client = events.clients.PrefectServerEventsClient()
     await connection.send(
@@ -189,9 +185,7 @@ async def test_add_workflow(websocket, mocker):
     )
     api.workflows.return_value = []
     (connection,) = server.connections
-    dispatched = asyncio.create_task(
-        dispatch_new_runs(websocket=client)
-    )
+    dispatched = asyncio.create_task(dispatch_new_runs(websocket=client))
     # Now check that we start a new workflow of some sort
     await connection.send(
         json.dumps(
@@ -244,9 +238,7 @@ async def test_update_workflow(websocket, mocker):
         ),
     ]
     (connection,) = server.connections
-    dispatched = asyncio.create_task(
-        dispatch_new_runs(websocket=client)
-    )
+    dispatched = asyncio.create_task(dispatch_new_runs(websocket=client))
     # Now check that we start a new workflow of some sort
     await connection.send(
         json.dumps(

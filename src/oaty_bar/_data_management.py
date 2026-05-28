@@ -37,7 +37,7 @@ class DataManagementStation(Block):
       The URI of the data storage (DS) API.
     processing_uri
       The URI of the workflow processing (PROC) API.
-    
+
     """
 
     username: str

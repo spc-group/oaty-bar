@@ -1,16 +1,15 @@
-import uuid
 import argparse
 import asyncio
 import json
 import logging
+import uuid
 from collections.abc import Sequence
 from pathlib import Path
 
-from websockets.asyncio.client import ClientConnection, connect
 from prefect.events import emit_event
 from tiled.client import from_profile
 from tiled.profiles import get_default_profile_name
-
+from websockets.asyncio.client import ClientConnection, connect
 
 log = logging.getLogger("oaty-bar")
 
@@ -40,9 +39,9 @@ async def process_msg(msg: str, instance_uuid: str):
 
 
 async def dispatch_new_runs(
-        websocket: ClientConnection,
+    websocket: ClientConnection,
 ):
-    instance_uuid=uuid.uuid4()
+    instance_uuid = uuid.uuid4()
     async for msg in websocket:
         log.info(f"Received message {msg}")
         try:
@@ -81,7 +80,8 @@ def main(argv: Sequence[str] | None = None):
         description="Listen for new Tiled runs, and dispatch data management workflows in response.",
     )
     parser.add_argument(
-        "-p", "--tiled_profile",
+        "-p",
+        "--tiled_profile",
         type=str,
         help="The name of the Tiled profile to monitor for new runs.",
     )

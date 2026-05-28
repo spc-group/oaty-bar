@@ -1,26 +1,24 @@
 """A prefect flow for backing up databases e.g. the Bluesky catalog of runs."""
 
-import asyncio
 import argparse
+import asyncio
 import datetime as dt
 import os
 from pathlib import Path
 
 from prefect import flow, task
-from prefect.schedules import Cron
+from prefect.artifacts import create_link_artifact
 from prefect.logging import get_run_logger
+from prefect.schedules import Cron
 from prefect.variables import Variable
 from prefect_sqlalchemy import AsyncSqlAlchemyConnector
-from prefect.artifacts import create_link_artifact
 
 
 @task(
     task_run_name="dump-{name}",
     persist_result=True,
 )
-async def dump_postgres(
-        name: str
-) -> Path:
+async def dump_postgres(name: str) -> Path:
     """Create a dumped directory of the postgres database."""
     # Database connection info is stored in prefect blocks for security
     database_block = await AsyncSqlAlchemyConnector.load(name)
@@ -58,7 +56,8 @@ async def dump_postgres(
         "8",
     ]
     proc = await asyncio.create_subprocess_shell(
-        " ".join(args), env={**os.environ, "PGPASSWORD": connection.password.get_secret_value()},
+        " ".join(args),
+        env={**os.environ, "PGPASSWORD": connection.password.get_secret_value()},
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -126,7 +125,9 @@ def main(argv=None):
     )
     parser.add_argument(
         "--deploy",
-        help="Deploy this flow to run every Monday instead of executing it immediately.", action="store_true")
+        help="Deploy this flow to run every Monday instead of executing it immediately.",
+        action="store_true",
+    )
     args = parser.parse_args(argv)
     if args.deploy:
         backup_databases.serve(
