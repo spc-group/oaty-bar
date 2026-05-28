@@ -45,7 +45,7 @@ async def dispatch_new_runs(
     async for msg in websocket:
         log.info(f"Received message {msg}")
         try:
-            await process_msg(msg=msg, instance_uuid=instance_uuid)
+            await process_msg(msg=msg, instance_uuid=str(instance_uuid))
         except Exception as exc:
             log.exception(exc)
             continue

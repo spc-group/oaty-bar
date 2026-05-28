@@ -36,6 +36,6 @@ async def process_run(
         fit_run_fluorescence(run=run, results_catalog=results_catalog),
         return_exceptions=True,
     )
-    exceptions = [exc for exc in results if isinstance(exc, BaseException)]
+    exceptions = [exc for exc in results if isinstance(exc, Exception)]
     if any(exceptions):
         raise ExceptionGroup("Run processing failed", exceptions)

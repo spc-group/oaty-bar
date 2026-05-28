@@ -5,9 +5,9 @@ import logging
 import re
 from collections.abc import Mapping
 from pathlib import Path
-from typing import IO, Any
+from typing import Any
 
-from pandas import DataFrame
+import xarray as xr
 from prefect import task
 from tiled.client.container import Container
 from tiled.utils import SerializationError
@@ -79,16 +79,16 @@ def headers(
         yield "# -------------"
 
 
-def data_keys(metadata: Mapping[str, Mapping | str | float | int]) -> dict[str, dict]:
+def data_keys(metadata: Mapping[str, Any]) -> dict[str, dict]:
     """Prepare valid hinted data keys for a stream.
 
     *metadata* should be the metadata dictionary for a specific stream.
 
     """
     dkeys = metadata["data_keys"]
-    hints = metadata["hints"]
+    hints_ = metadata["hints"]
     hints = [
-        hint for dev_hints in hints.values() for hint in dev_hints.get("fields", [])
+        hint for dev_hints in hints_.values() for hint in dev_hints.get("fields", [])
     ]
     dkeys = {key: desc for key, desc in dkeys.items() if key in hints}
     # Remove external datasets that won't be in the internal dataframe
@@ -99,10 +99,10 @@ def data_keys(metadata: Mapping[str, Mapping | str | float | int]) -> dict[str, 
 def build_xdi(
     metadata: dict[str, Any],
     stream_metadata: dict[str, Any],
-    data: DataFrame,
+    data: xr.Dataset,
     *,
     strict: bool,
-) -> IO[bytes]:
+) -> str:
     """Build an XDI string based on data and metadata.
 
     Parameters
@@ -122,21 +122,15 @@ def build_xdi(
     xdi_text += f"# {cols}\n"
     buffer = io.StringIO()
     # Convert it from an xarray into a pandas data frame for easy serialization
-    # data_dict = data.to_dict()
-    # data_dict = {**data_dict["data_vars"], **data_dict["coords"]}
-    # data_dict = {name: val["data"] for name, val in data_dict.items()}
-    # df = DataFrame(data_dict)
     df = data.to_dataframe()
-    df.to_csv(buffer, sep="\t", header=False, index=False)
+    df.to_csv(buffer, sep="\t", header=False, index=False, columns=data_keys_.keys())
     buffer.seek(0)
     xdi_text += buffer.read()
     return xdi_text
 
 
 @task()
-async def serialize_tsv(
-    buff: IO[bytes] | Path, run: Container, use_xdi: bool | None = None
-):
+async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = False):
     """Write a bluesky run as tab-separated values.
 
     Assumes that *node* is a BlueskyRun.
@@ -161,6 +155,6 @@ async def serialize_tsv(
         data=data,
         strict=use_xdi,
     )
-    with open(buff, mode="w") as fd:
+    with open(filepath, mode="w") as fd:
         fd.write(xdi_text)
     return xdi_text

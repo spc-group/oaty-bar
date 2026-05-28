@@ -60,12 +60,13 @@ async def export_run(
     if not target_dir:
         beamline_id = run.metadata["start"]["beamline_id"]
         exp_name = run.metadata["start"]["dm_exp"]
-        target_dir = Path("/net/s25data/export") / beamline_id / exp_name
-        target_dir.mkdir(exist_ok=True, parents=False)
+        target_dir_ = Path("/net/s25data/export") / beamline_id / exp_name
+        target_dir_.mkdir(exist_ok=True, parents=False)
         # dmax_client = await load_client(run.metadata['start']['dm_station_name'], asyncio=True)
         # dm_exp = await dmax_client.experiment(name=run.metadata['start']['dm_exp'])
         # target_dir = dm_exp.data_path
-    target_dir_ = Path(target_dir)
+    else:
+        target_dir_ = Path(target_dir)
     hdf_file = target_dir_ / build_file_name(run.metadata, extension=".hdf")
     use_xdi = run.metadata.get("start", {}).get("plan_name") == "xafs_scan"
     extension = ".xdi" if use_xdi else ".tsv"
@@ -79,13 +80,13 @@ async def export_run(
             semaphore=semaphore,
         ),
         serialize_tsv(
-            buff=tsv_file,
+            filepath=tsv_file,
             run=run,
             use_xdi=use_xdi,
         ),
         return_exceptions=True,
     )
-    exceptions = [exc for exc in results if isinstance(exc, BaseException)]
+    exceptions = [exc for exc in results if isinstance(exc, Exception)]
     if any(exceptions):
         raise ExceptionGroup("Export runs failed", exceptions)
 

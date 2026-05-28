@@ -96,16 +96,19 @@ xafs_run_metadata = {
 
 xafs_primary = xr.Dataset(
     {
-        "energy": np.linspace(8300, 8400, num=100),
-        "energy-id-energy-readback": np.linspace(8.32, 8.42, num=100),
-        "ts_energy": np.linspace(0, 15, num=100),
-        "ts_energy-id-energy-readback": np.linspace(0, 15, num=100),
-        "It-net_current": np.abs(np.sin(np.linspace(0, 4 * np.pi, num=100))),
-        "ts_It-net_current": np.linspace(0, 15, num=100),
-        "I0-net_current": np.linspace(1, 2, num=100),
-        "ts_I0-net_current": np.linspace(0, 15, num=100),
-        "ge_8element": (["frame", "element", "bin"], np.ones(shape=(100, 8, 1024))),
-        "ge_8element-element0-all_event": np.ones(shape=(100,)),
+        "energy": (["dim0"], np.linspace(8300, 8400, num=100)),
+        "energy-id-energy-readback": (["dim0"], np.linspace(8.32, 8.42, num=100)),
+        "ts_energy": (["dim0"], np.linspace(0, 15, num=100)),
+        "ts_energy-id-energy-readback": (["dim0"], np.linspace(0, 15, num=100)),
+        "It-net_current": (
+            ["dim0"],
+            np.abs(np.sin(np.linspace(0, 4 * np.pi, num=100))),
+        ),
+        "ts_It-net_current": (["dim0"], np.linspace(0, 15, num=100)),
+        "I0-net_current": (["dim0"], np.linspace(1, 2, num=100)),
+        "ts_I0-net_current": (["dim0"], np.linspace(0, 15, num=100)),
+        "ge_8element": (["dim0", "dim1", "dim2"], np.ones(shape=(100, 8, 1024))),
+        "ge_8element-element0-all_event": (["dim0"], np.ones(shape=(100,))),
     }
 )
 

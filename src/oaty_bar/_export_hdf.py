@@ -606,12 +606,13 @@ def export_hdf(
     if not target_dir:
         beamline_id = run.metadata["start"]["beamline_id"]
         exp_name = run.metadata["start"]["dm_exp"]
-        target_dir = Path("/net/s25data/export") / beamline_id / exp_name
-        target_dir.mkdir(exist_ok=True, parents=False)
+        target_dir_ = Path("/net/s25data/export") / beamline_id / exp_name
+        target_dir_.mkdir(exist_ok=True, parents=False)
         # dmax_client = load_client(run.metadata['start']['dm_station_name'])
         # dm_exp = dmax_client.experiment(name=run.metadata['start']['dm_exp'])
         # target_dir = dm_exp.data_path
-    target_dir_ = Path(target_dir)
+    else:
+        target_dir_ = Path(target_dir)
     target_file = target_dir_ / build_file_name(run.metadata)
     asyncio.run(
         serialize_hdf(

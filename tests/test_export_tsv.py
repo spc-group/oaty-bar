@@ -20,6 +20,7 @@ async def xdi_text(xafs_run, tmp_path):
         return await serialize_tsv(
             tmp_file,
             run=xafs_run,
+            use_xdi=True,
         )
 
     await do_flow()
