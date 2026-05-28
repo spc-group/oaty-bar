@@ -20,7 +20,7 @@ async def export_run(
     target_dir: str = "",
     raw_profile: str = "oaty-bar",
     results_profile: str = "oaty-bar-results",
-    force: bool = False,
+    force: bool = True,
     semaphore: asyncio.Semaphore | None = None,
 ):
     """Export a Tiled run with UID *uid* to files in *target_dir*.
