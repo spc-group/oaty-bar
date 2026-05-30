@@ -68,7 +68,11 @@ async def export_run(
     else:
         target_dir_ = Path(target_dir)
     hdf_file = target_dir_ / build_file_name(run.metadata, extension=".hdf")
-    use_xdi = run.metadata.get("start", {}).get("plan_name") == "xafs_scan"
+    # Exporting to an XDI file requires certain metadata, otherwise we
+    # just export to TSV
+    plan_name = run.metadata.get("start", {}).get("plan_name")
+    has_edge = "edge" in run.metadata.get("start", {}).keys()
+    use_xdi = plan_name == "xafs_scan" and has_edge
     extension = ".xdi" if use_xdi else ".tsv"
     tsv_file = target_dir_ / build_file_name(run.metadata, extension=extension)
     results = await asyncio.gather(
