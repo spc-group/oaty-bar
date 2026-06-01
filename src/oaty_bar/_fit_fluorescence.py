@@ -4,17 +4,18 @@ import logging
 import time
 from asyncio import TaskGroup
 from collections.abc import Mapping, Sequence
-from concurrent.futures import ThreadPoolExecutor as ThreadExecutor
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+import xraydb
 from chemformula import ChemFormula
 from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
 from pint import Quantity, UnitRegistry
 from prefect import flow
 from prefect.assets import materialize
+from prefect.logging import get_run_logger
 from pybaselines import Baseline
 from tiled.client import from_profile
 from tiled.client.array import ArrayClient
@@ -145,6 +146,7 @@ async def fit_frame(
     detector_material: str,
     detector_thickness: Quantity,
 ):
+    log = get_run_logger()
     loop = asyncio.get_running_loop()
     array_name = node.path_parts[-1]
     elem_indices = list(range(node.shape[1]))
@@ -172,6 +174,11 @@ async def fit_frame(
     dt_factors = np.asarray([task.result() for task in dt_tasks])
     ticks = np.asarray([task.result() for task in clock_tasks])
     times = ticks / clock_freq
+    # Xraydb seems to have a race condition when we get detector
+    # material properties in multiple threads. So try to prime the
+    # database here.
+    detector_mu = xraydb.material_mu(detector_material, energy)
+    log.info(f"µ({energy}) for {detector_material} = {detector_mu}")
     # Do the actual fitting here
     async with TaskGroup() as tg:
         models = [
@@ -289,20 +296,15 @@ async def fit_fluorescence(
     run_uid: str,
     raw_profile: str,
     results_profile: str,
-    max_workers: int | None = None,
 ):
     # Load the necessary Tiled catalogs
     raw_catalog = from_profile(raw_profile)
     run = raw_catalog[run_uid]
     results_catalog = from_profile(results_profile)
-    return await fit_run_fluorescence(
-        run=run, results_catalog=results_catalog, max_workers=max_workers
-    )
+    return await fit_run_fluorescence(run=run, results_catalog=results_catalog)
 
 
-async def fit_run_fluorescence(
-    run: Container, results_catalog: Container, max_workers=None
-):
+async def fit_run_fluorescence(run: Container, results_catalog: Container):
     tasks: list[asyncio.Task] = []
     # We need a baseline energy to use for non-energy-scanning streams
     energy_signal = run.metadata.get("start", {}).get(
@@ -320,51 +322,44 @@ async def fit_run_fluorescence(
     elements = parse_chemical_formula(run.metadata["start"].get("sample_formula", ""))
     if len(elements) == 0:
         log.warning(f"Fitting 0 chemical elements for run '{run.uri}'")
-    with ThreadExecutor(max_workers=max_workers) as executor:
-        async with TaskGroup() as tg:
-            loop = asyncio.get_running_loop()
-            loop.set_default_executor(executor)
-            nodes = xrf_datasets(run)
-            tasks = []
-            for source_node in nodes:
-                stream_name, array_name = source_node.path_parts[-2:]
-                stream = source_node.parent
-                config = stream.metadata["configuration"][array_name]
-                ev_per_bin = config["data"][f"{array_name}-ev_per_bin"]
-                try:
-                    material, thickness = detector_metadata(config, array_name)
-                except KeyError as exc:
-                    log.error(
-                        f"Missing configuration '{exc.args[0]}' for '{array_name}'"
-                    )
-                    continue
-                baseline_energies = np.full(
-                    shape=source_node.shape[:1], fill_value=baseline_energy
-                )
-                energies = (
-                    stream[energy_signal].read()
-                    if energy_signal in stream.keys()
-                    else baseline_energies
-                )
-                # Let prefect know what assets we expect to produce
-                expected_table_uri = (
-                    f"{results_run.uri}/{source_node.path_parts[-1]}-fit"
-                )
-                node_name = source_node.path_parts[-1]
-                coro = materialize(
-                    expected_table_uri,
-                    asset_deps=[source_node.uri],
-                    task_run_name=f"fit-xrf-{node_name}",
-                )(fit_array)(
-                    source_node,
-                    energies,
-                    results_node=results_run,
-                    elements=elements,
-                    ev_per_bin=ev_per_bin,
-                    detector_material=material,
-                    detector_thickness=thickness,
-                )
-                tasks.append(tg.create_task(coro))
+    async with TaskGroup() as tg:
+        nodes = xrf_datasets(run)
+        tasks = []
+        for source_node in nodes:
+            stream_name, array_name = source_node.path_parts[-2:]
+            stream = source_node.parent
+            config = stream.metadata["configuration"][array_name]
+            ev_per_bin = config["data"][f"{array_name}-ev_per_bin"]
+            try:
+                material, thickness = detector_metadata(config, array_name)
+            except KeyError as exc:
+                log.error(f"Missing configuration '{exc.args[0]}' for '{array_name}'")
+                continue
+            baseline_energies = np.full(
+                shape=source_node.shape[:1], fill_value=baseline_energy
+            )
+            energies = (
+                stream[energy_signal].read()
+                if energy_signal in stream.keys()
+                else baseline_energies
+            )
+            # Let prefect know what assets we expect to produce
+            expected_table_uri = f"{results_run.uri}/{source_node.path_parts[-1]}-fit"
+            node_name = source_node.path_parts[-1]
+            coro = materialize(
+                expected_table_uri,
+                asset_deps=[source_node.uri],
+                task_run_name=f"fit-xrf-{node_name}",
+            )(fit_array)(
+                source_node,
+                energies,
+                results_node=results_run,
+                elements=elements,
+                ev_per_bin=ev_per_bin,
+                detector_material=material,
+                detector_thickness=thickness,
+            )
+            tasks.append(tg.create_task(coro))
     results = [task.result() for task in tasks]
     if len(results) == 0:
         log.warning("Fitting produced no results.")
@@ -391,12 +386,6 @@ def main(argv: Sequence[str] | None = None):
         help="The name of the Tiled profile used for processed run data.",
     )
     parser.add_argument(
-        "--max-workers",
-        type=int,
-        default=None,
-        help="How many worker threads will be processing spectra.",
-    )
-    parser.add_argument(
         "--deploy",
         action="store_true",
         help="Start worker listening for new work instead of running immediately.",
@@ -411,6 +400,5 @@ def main(argv: Sequence[str] | None = None):
                 run_uid=args.run_uid,
                 raw_profile=args.raw_profile,
                 results_profile=args.results_profile,
-                max_workers=args.max_workers,
             )
         )

@@ -1,14 +1,13 @@
 """A Prefect workflow for processing a raw Tiled run."""
 
-import asyncio
-
 from prefect import flow
+from prefect.task_runners import ProcessPoolTaskRunner
 from tiled.client import from_profile
 
 from ._fit_fluorescence import fit_run_fluorescence
 
 
-@flow()
+@flow(task_runner=ProcessPoolTaskRunner())
 async def process_run(
     run_uid: str,
     raw_profile: str = "oaty-bar",
@@ -32,10 +31,11 @@ async def process_run(
     raw_catalog = from_profile(raw_profile)
     run = raw_catalog[run_uid]
     results_catalog = from_profile(results_profile)
-    results = await asyncio.gather(
-        fit_run_fluorescence(run=run, results_catalog=results_catalog),
-        return_exceptions=True,
-    )
-    exceptions = [exc for exc in results if isinstance(exc, Exception)]
-    if any(exceptions):
-        raise ExceptionGroup("Run processing failed", exceptions)
+    await fit_run_fluorescence(run=run, results_catalog=results_catalog)
+    # results = await asyncio.gather(
+    #     fit_run_fluorescence(run=run, results_catalog=results_catalog),
+    #     return_exceptions=True,
+    # )
+    # exceptions = [exc for exc in results if isinstance(exc, Exception)]
+    # if any(exceptions):
+    #     raise ExceptionGroup("Run processing failed", exceptions)
