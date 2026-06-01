@@ -84,3 +84,64 @@ deployments:
     name: "gdata"
     work_queue_name: null
     job_variables: {}
+automations:
+- name: Notify Failed Bluesky Run @ 25-ID-C
+  description: Notify beamline staff when a bluesky run fails at 25-ID-C
+  enabled: true
+  tags: []
+  trigger:
+    type: event
+    match:
+      aps.beamline.id:
+      - 25-ID-C
+      prefect.resource.id:
+      - oaty-bar.dispatcher.*
+    match_related: {}
+    after: []
+    expect:
+    - bluesky.run.fail
+    for_each: []
+    posture: Reactive
+    threshold: 1
+    within: 60.0
+  actions:
+  - type: send-notification
+    block_document_id: 5824cb50-c7bd-4cc8-abb9-559968f279d9
+    subject: A Bluesky run failed
+    body: "Reason: {{ event.payload.metadata.stop.reason }}\n\nRun Details:\n  UID:\
+      \ {{ event.payload.metadata.start.uid }}\n  Beamline: {{ event.payload.metadata.start.beamline_id\
+      \ }}\n  Scan name: {{ event.payload.metadata.start.scan_name }}"
+  actions_on_trigger: []
+  actions_on_resolve: []
+  owner_resource: null
+  id: 1a169cb9-9376-461f-aa3f-112cce68246b
+- name: Notify Failed Bluesky Run @ 25-ID-D
+  description: Notify beamline staff when a bluesky run fails at 25-ID-D
+  enabled: true
+  tags: []
+  trigger:
+    type: event
+    match:
+      aps.beamline.id:
+      - 25-ID-D
+      prefect.resource.id:
+      - oaty-bar.dispatcher.*
+    match_related: {}
+    after: []
+    expect:
+    - bluesky.run.fail
+    for_each: []
+    posture: Reactive
+    threshold: 1
+    within: 60.0
+  actions:
+  - type: send-notification
+    block_document_id: 6878cb0f-6536-49f8-bbd1-5ca1a8a5fec2
+    subject: A Bluesky run failed
+    body: "Reason: {{ event.payload.metadata.stop.reason }}\n\nRun Details:\n  UID:\
+      \ {{ event.payload.metadata.start.uid }}\n  Beamline: {{ event.payload.metadata.start.beamline_id\
+      \ }}\n  Scan name: {{ event.payload.metadata.start.scan_name }}"
+  actions_on_trigger: []
+  actions_on_resolve: []
+  owner_resource: null
+  id: 1f92c165-bfa1-4512-a192-d03317b14b0b

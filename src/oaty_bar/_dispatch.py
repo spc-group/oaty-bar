@@ -30,7 +30,8 @@ async def process_msg(msg: str, instance_uuid: str):
     # Create a prefect event so it can be routed to the correct workflows
     resource = {
         "prefect.resource.id": f"oaty-bar.dispatcher.{instance_uuid}",
-        "run_uid": uid,
+        "bluesky.run.uid": uid,
+        "aps.beamline.id": metadata.get('start', {}).get("beamline_id", ""),
     }
     log.info(f"Emitting events for resource: {resource}")
     emit_event("bluesky.run.stopped", resource=resource, payload=payload)
