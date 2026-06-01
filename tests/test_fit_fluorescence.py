@@ -66,9 +66,7 @@ async def test_writes_result_container(
 
     @flow()
     async def do_fit():
-        await fit_run_fluorescence(
-            run=run, results_catalog=results_catalog, max_workers=1
-        )
+        await fit_run_fluorescence(run=run, results_catalog=results_catalog)
 
     await do_fit()
     t1 = time.perf_counter()
@@ -191,9 +189,7 @@ async def test_deadtime_correction(xrf_catalog, results_catalog, ignore_larch_wa
 
     @flow()
     async def do_fit():
-        return await fit_run_fluorescence(
-            run=run, results_catalog=results_catalog, max_workers=1
-        )
+        return await fit_run_fluorescence(run=run, results_catalog=results_catalog)
 
     results = await do_fit()
 

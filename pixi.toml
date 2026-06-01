@@ -28,7 +28,7 @@ peakutils = ">=1.3.5, <2"
 pybaselines = ">=1.2.1, <2"
 pint = ">=0.25.3, <0.26"
 # dmax  = { path = "../dmax", editable = true }
-dmax = ">=0.0.8, <0.1.0"
+dmax = ">=0.0.9, <0.1.0"
 prefect = { version = ">=3.7.1, <4", extras = ["sqlalchemy", "slack"] }
 platformdirs = ">=4.9.6, <5"
 

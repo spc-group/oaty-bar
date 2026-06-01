@@ -24,6 +24,18 @@ pull:
 # the deployments section allows you to provide configuration
 # for deploying flows
 deployments:
+- name: prepare-data-storage
+  version: "1"
+  tags: []
+  description: "Prepare a folder, DAQ, skeleton files, etc for a DM experiment."
+  schedule: {}
+  flow_name: "prepare-data-storage"
+  entrypoint: "src/oaty_bar/_data_storage.py:prepare_data_storage"
+  parameters: {}
+  work_pool:
+    name: "gdata"
+    work_queue_name: null
+    job_variables: {}
 - name: process-run
   version: "1"
   tags: []
