@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from prefect import flow
+from prefect.logging import get_run_logger
 from tiled.client import from_profile
 from tiled.queries import Eq
 
@@ -47,6 +48,7 @@ async def export_run(
       omitted, a default will be created.
 
     """
+    log = get_run_logger()
     if semaphore is None:
         semaphore = asyncio.Semaphore(10)
     raw_catalog = from_profile(raw_profile)
@@ -55,6 +57,7 @@ async def export_run(
         results_catalog = from_profile(results_profile)
         results_runs = results_catalog.search(Eq("run_uid", run_uid))
     else:
+        log.warning("No results profile specified, only raw data will be exported.")
         results_runs = None
     # DM experiments contain the export path, which is our default
     if not target_dir:
@@ -68,14 +71,7 @@ async def export_run(
     else:
         target_dir_ = Path(target_dir)
     hdf_file = target_dir_ / build_file_name(run.metadata, extension=".hdf")
-    # Exporting to an XDI file requires certain metadata, otherwise we
-    # just export to TSV
-    plan_name = run.metadata.get("start", {}).get("plan_name")
-    has_edge = "edge" in run.metadata.get("start", {}).keys()
-    use_xdi = plan_name == "xafs_scan" and has_edge
-    extension = ".xdi" if use_xdi else ".tsv"
-    tsv_file = target_dir_ / build_file_name(run.metadata, extension=extension)
-    results = await asyncio.gather(
+    coros = [
         serialize_hdf(
             buff=hdf_file,
             run=run,
@@ -83,13 +79,28 @@ async def export_run(
             force=force,
             semaphore=semaphore,
         ),
-        serialize_tsv(
-            filepath=tsv_file,
-            run=run,
-            use_xdi=use_xdi,
-        ),
-        return_exceptions=True,
-    )
+    ]
+    # Not all scans are compatile with TSV exporting (e.g. fly scans)
+    can_make_tsv = "primary" in run.keys()
+    if can_make_tsv:
+        # Exporting to an XDI file requires certain metadata, otherwise we
+        # just export to TSV
+        plan_name = run.metadata.get("start", {}).get("plan_name")
+        has_edge = "edge" in run.metadata.get("start", {}).keys()
+        use_xdi = plan_name == "xafs_scan" and has_edge
+        extension = ".xdi" if use_xdi else ".tsv"
+        tsv_file = target_dir_ / build_file_name(run.metadata, extension=extension)
+        coros.append(
+            serialize_tsv(
+                filepath=tsv_file,
+                run=run,
+                use_xdi=use_xdi,
+            ),
+        )
+    else:
+        log.warning("Cannot make TSV or XDI file. Skipping.")
+    # Now that we've built the tasks, we can execute them in parallel
+    results = await asyncio.gather(*coros, return_exceptions=True)
     exceptions = [exc for exc in results if isinstance(exc, Exception)]
     if any(exceptions):
         raise ExceptionGroup("Export runs failed", exceptions)
