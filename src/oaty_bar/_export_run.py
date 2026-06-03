@@ -122,7 +122,7 @@ def main(argv: Sequence[str] | None = None):
         help="The DM directory to receive the exported file.",
     )
     parser.add_argument(
-        "--raw-profile", help="The name of the Tiled profile used for raw runs."
+        "--raw-profile", help="The name of the Tiled profile used for raw runs.", default="oaty-bar",
     )
     parser.add_argument(
         "--results-profile",
