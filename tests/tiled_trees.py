@@ -85,7 +85,7 @@ xafs_run_metadata = {
     "summary": {
         "datetime": "2022-10-06 09:14:57.363525",
         "duration": 38.35049033164978,
-        "plan_name": "rel_scan",
+        "plan_name": "xafs_scan",
         "scan_id": 1,
         "stream_names": ["primary"],
         "timestamp": 1665065697.3635247,
@@ -241,7 +241,7 @@ data_keys = {
         "dtype_numpy": "<u4",
         "external": "STREAM:",
         "object_name": "ge_8element",
-        "shape": [100, 8, 1024],
+        "shape": [1, 8, 1024],
         "source": "ca://XSP_Ge_8elem:HDF1:FullFileName_RBV",
     },
     "ge_8element-element0-all_event": {

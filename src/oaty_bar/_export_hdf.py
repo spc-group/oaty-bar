@@ -305,9 +305,10 @@ async def write_data_key(
             )
         nxfield(data_group, "value", xarr[col_name])
     else:
+        array_node = stream_node[col_name]
         # Create an empty array to hold the data
         dtype = data_key.get("dtype_numpy", None)
-        shape = data_key["shape"]
+        shape = array_node.shape
         if data_key.get("dtype", None) == "array":
             compression, chunks = ("gzip", (1, *shape[1:]))
         else:
@@ -321,7 +322,6 @@ async def write_data_key(
             chunks=chunks,
         )
         # Load slices in parallel
-        array_node = stream_node[col_name]
         coros = [
             write_array_slice(array_node, slc, array_group, semaphore=semaphore)
             for slc in range(shape[0])

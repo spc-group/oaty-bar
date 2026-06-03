@@ -7,6 +7,7 @@ from unittest import mock
 import h5py
 import numpy as np
 import pandas as pd
+from prefect import flow
 import pytest
 import pytest_asyncio
 from nexusformat.nexus import NXFile
@@ -31,13 +32,17 @@ root:NXroot
     instrument:NXinstrument
       bluesky:NXnote
         metadata:NXnote
+          start.beamline_id = '255-ID-Z'
+          start.d_spacing = 3.131562
           start.detectors = '["I0"]'
+          start.edge = 'Ni-K'
+          start.facility_id = 'Advanced Photon Source'
           start.hints = '{"dimensions": [[["pitch2"], "primary"]]}'
           start.motors = '["pitch2"]'
           start.num_intervals = 19
           start.num_points = 20
           start.plan_args = '{"args": ["EpicsMotor(prefix='25idDCM:AS:m6', name='pitc...'
-          start.plan_name = 'rel_scan'
+          start.plan_name = 'xafs_scan'
             @target = '/7d1daf1d-60c7-4aa7-a668-d1cd97e5335f/instrume...'
           start.plan_pattern = 'inner_product'
           start.plan_pattern_args = '{"args": ["EpicsMotor(prefix='25idDCM:AS:m6', name='pitc...'
@@ -61,7 +66,7 @@ root:NXroot
           stop.uid = 'c1eac86f-d568-41a1-b601-a0e2fd6ed55e'
           summary.datetime = '2022-10-06 09:14:57.363525'
           summary.duration = 38.35049033164978
-          summary.plan_name = 'rel_scan'
+          summary.plan_name = 'xafs_scan'
           summary.scan_id = 1
           summary.stream_names = '["primary"]'
           summary.timestamp = 1665065697.3635247
@@ -190,7 +195,11 @@ class NexusIO(NXFile):
 async def nxfile(xafs_run, semaphore):
     # Generate the headers
     buff = io.BytesIO()
-    await serialize_hdf(buff, xafs_run, semaphore=semaphore)
+    @flow()
+    async def do():
+        await serialize_hdf(buff, xafs_run, semaphore=semaphore)
+
+    await do()
     with NexusIO(buff, mode="r") as fd:
         # Write data entry to the nexus file
         yield fd
@@ -267,9 +276,14 @@ def test_nxexternallink_targets():
 @pytest.mark.asyncio
 async def test_export_results(xafs_run, results_catalog, mocker, semaphore):
     buff = io.BytesIO()
-    await serialize_hdf(
-        buff, xafs_run, results_runs=results_catalog, semaphore=semaphore
-    )
+
+    @flow()
+    async def do():
+        await serialize_hdf(
+            buff, xafs_run, results_runs=results_catalog, semaphore=semaphore
+        )
+
+    await do()
     with h5py.File(buff, mode="r") as fd:
         # Check that all datasets are in the 'results' group
         results = fd["7d1daf1d-60c7-4aa7-a668-d1cd97e5335f/results"]
