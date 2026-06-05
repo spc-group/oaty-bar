@@ -50,7 +50,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/python_abi-3.14-8_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - pypi: .
-      - pypi: git+https://github.com/spc-group/xraydb?subdirectory=python&branch=thread-safety#df691627356f12f30bca9bd1fc78d78ac5125a80
+      - pypi: git+https://github.com/spc-group/xraydb?subdirectory=python&rev=ba46a74c6b44317e91a6a7e752938e7b648786b9#ba46a74c6b44317e91a6a7e752938e7b648786b9
       - pypi: https://files.pythonhosted.org/packages/00/8d/7f362c2fb8ef4decd2160bc24d4292c6ca658cc6d9a161b89ca5122bbdbf/cyclopts-4.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/00/a9/bd823b345fb06c83ade6ef1c1933521d4357cd04490e684d4fa30126926c/ndindex-1.10.1-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/b7/e3bf5133d697a08128598c8d0abc5e16377b51465a33756de24fa7dee953/aiosqlite-0.22.1-py3-none-any.whl
@@ -359,7 +359,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/python_abi-3.14-8_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - pypi: .
-      - pypi: git+https://github.com/spc-group/xraydb?subdirectory=python&branch=thread-safety#df691627356f12f30bca9bd1fc78d78ac5125a80
+      - pypi: git+https://github.com/spc-group/xraydb?subdirectory=python&rev=ba46a74c6b44317e91a6a7e752938e7b648786b9#ba46a74c6b44317e91a6a7e752938e7b648786b9
       - pypi: https://files.pythonhosted.org/packages/00/8d/7f362c2fb8ef4decd2160bc24d4292c6ca658cc6d9a161b89ca5122bbdbf/cyclopts-4.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/00/a9/bd823b345fb06c83ade6ef1c1933521d4357cd04490e684d4fa30126926c/ndindex-1.10.1-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/b7/e3bf5133d697a08128598c8d0abc5e16377b51465a33756de24fa7dee953/aiosqlite-0.22.1-py3-none-any.whl
@@ -1165,7 +1165,7 @@ packages:
 - pypi: .
   name: oaty-bar
   requires_python: '>=3.14'
-- pypi: git+https://github.com/spc-group/xraydb?subdirectory=python&branch=thread-safety#df691627356f12f30bca9bd1fc78d78ac5125a80
+- pypi: git+https://github.com/spc-group/xraydb?subdirectory=python&rev=ba46a74c6b44317e91a6a7e752938e7b648786b9#ba46a74c6b44317e91a6a7e752938e7b648786b9
   name: xraydb
   version: 4.5.8
   requires_dist:

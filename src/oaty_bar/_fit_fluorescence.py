@@ -178,7 +178,7 @@ async def fit_frame(
     # material properties in multiple threads. So try to prime the
     # database here.
     detector_mu = xraydb.material_mu(detector_material, energy)
-    log.info(f"µ({energy}) for {detector_material} = {detector_mu}")
+    # log.info(f"µ({energy}) for {detector_material} = {detector_mu}")
     # Do the actual fitting here
     async with TaskGroup() as tg:
         models = [
