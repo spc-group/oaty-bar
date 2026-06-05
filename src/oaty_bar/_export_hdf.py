@@ -293,10 +293,15 @@ async def write_data_key(
     semaphore: asyncio.Semaphore,
 ) -> h5py.Group:
     """Load the data from the API and write it to an HDF5 group."""
+    log = get_run_logger()
     stream_name = stream_node.path_parts[-1]
     data_group = nxdata(stream_group, col_name)
     loop = asyncio.get_running_loop()
     ndims = len(data_key.get("shape", []))
+    if col_name not in stream_node.keys():
+        stream_path = '/'.join(stream_node.path_parts)
+        log.warning(f"Signal '{col_name}' not found in stream {stream_path}. Skipping.")
+        return
     if ndims < 3:
         # Simple array, easier to load all at once
         async with semaphore:
@@ -341,7 +346,8 @@ async def write_data_key(
         nxfield(data_group, "time", timestamps - np.min(timestamps))
         data_group["time"].attrs["units"] = "s"
         data_group.attrs["axes"] = "time"
-    log.info(f"Could not find timestamps for dataset '{stream_name}/{col_name}'")
+    else:
+        log.info(f"Could not find timestamps for dataset '{stream_name}/{col_name}'")
 
     # Extra parameters
     data_group.attrs["signal"] = "value"
