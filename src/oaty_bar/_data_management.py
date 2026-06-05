@@ -37,15 +37,17 @@ class DataManagementStation(Block):
       The URI of the data storage (DS) API.
     processing_uri
       The URI of the workflow processing (PROC) API.
+    data_archive_uri
+      The URI of the workflow processing (DAQ) API.
 
     """
-
     username: str
     password: SecretStr
     station_name: str
     scheduling_uri: str = ""
     data_storage_uri: str = ""
     processing_uri: str = ""
+    data_archive_uri: str = ""
 
 
 async def load_client(station_name: str, asyncio=True) -> dmax.Client:
@@ -58,5 +60,6 @@ async def load_client(station_name: str, asyncio=True) -> dmax.Client:
         scheduling_uri=creds.scheduling_uri,
         data_storage_uri=creds.data_storage_uri,
         processing_uri=creds.processing_uri,
+        data_archive_uri=creds.data_archive_uri,
     )
     return client
