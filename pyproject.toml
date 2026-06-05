@@ -24,7 +24,6 @@ Homepage = "https://github.com/spc-group/oaty-bar"
 
 [project.scripts]
 dispatch-workflows = "oaty_bar._dispatch:main"
-export-hdf = "oaty_bar._export_hdf:main"
 export-run = "oaty_bar._export_run:main"
 fit-fluorescence = "oaty_bar._fit_fluorescence:main"
 backup-databases = "oaty_bar._backup_databases:main"

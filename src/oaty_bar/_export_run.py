@@ -32,6 +32,10 @@ async def export_run(
     exists in *target_dir*, this operation will fail unless *force* is
     True, in which case the existing files will be overwritten.
 
+    If *target_dir* is not provided, a default destination for the new
+    file will be determined from the corresponding DM experiment
+    metadata.
+
     Parameters
     ==========
     run_uid
