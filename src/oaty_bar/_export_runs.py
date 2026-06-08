@@ -8,10 +8,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from textwrap import dedent
 from typing import Any
 
 from bluesky_tiled_plugins.clients.bluesky_run import BlueskyRun
 from prefect import flow
+from prefect.flow_runs import pause_flow_run
+from prefect.input import RunInput
 from prefect.logging import get_run_logger
 from tiled import queries
 from tiled.client import from_profile
@@ -124,9 +127,6 @@ async def _export_run(
         exp_name = run.metadata["start"]["dm_exp"]
         target_dir_ = Path("/net/s25data/export") / beamline_id / exp_name
         target_dir_.mkdir(exist_ok=True, parents=False)
-        # dmax_client = await load_client(run.metadata['start']['dm_station_name'], asyncio=True)
-        # dm_exp = await dmax_client.experiment(name=run.metadata['start']['dm_exp'])
-        # target_dir = dm_exp.data_path
     else:
         target_dir_ = Path(target_dir)
     hdf_file = target_dir_ / build_file_name(run.metadata, extension=".hdf")
@@ -164,6 +164,11 @@ async def _export_run(
         raise ExceptionGroup("Export runs failed", exceptions)
 
 
+class ContinueDecision(RunInput):
+    approve: bool
+    total_exports: int
+
+
 @flow()
 async def export_runs(
     target_dir: Path | None = None,
@@ -182,7 +187,7 @@ async def export_runs(
     raw_profile: str = "oaty-bar",
     results_profile: str = "oaty-bar-results",
     force: bool = False,
-    max_runs: int = 200,
+    max_runs: int = 1,
 ):
     """Export Tiled runs as HDF and XDI/TSV files.
 
@@ -241,6 +246,7 @@ async def export_runs(
       results data.
 
     """
+    log = get_run_logger()
     # Get only the runs requested by the user
     queries = QuerySet(
         before=before.timestamp() if before is not None else None,
@@ -255,14 +261,32 @@ async def export_runs(
         uid=run_uid,
     )
     catalog = from_profile(raw_profile)
-    print(catalog["7d1daf1d-60c7-4aa7-a668-d1cd97e5335f"].metadata)
     runs = queries.apply(catalog)
     if len(runs) == 0:
         raise NoRuns("No runs found matching query parameters.")
     if len(runs) > max_runs:
-        raise TooManyRuns(
-            f"Queries produced {len(runs)} runs. Either provide additional queries or increase *max_workers*."
+        # We need to make sure
+        description_md = dedent(f"""
+            # Approval Needed
+            
+            This flow will export **{len(runs)} runs**, higher than the expected maximum of {max_runs}. Please confirm that this is correct.
+            
+            Optionally, use *total_exports* to only export the first N runs.
+            
+            """)
+        response = await pause_flow_run(
+            wait_for_input=ContinueDecision.with_initial_data(
+                description=description_md, total_exports=len(runs)
+            )
         )
+        if response.approve:
+            max_runs = response.total_exports
+            log.info(f"Approved to export {max_runs} run(s).")
+        else:
+            log.error(f"Exporting {len(runs)} run(s) disapproved.")
+            raise TooManyRuns(
+                f"Queries produced {len(runs)} runs but we're limited to {max_runs}. Either provide additional queries or increase *max_runs*."
+            )
     # Start the exporters in parallel
     do_export = partial(
         _export_run,
@@ -271,7 +295,7 @@ async def export_runs(
         results_profile=results_profile,
         force=force,
     )
-    coros = (do_export(run) for run in runs.values())
+    coros = (do_export(run) for run in runs.values().head(max_runs))
     results = await asyncio.gather(*coros, return_exceptions=True)
     exceptions = [exc for exc in results if isinstance(exc, Exception)]
     if any(exceptions):
@@ -332,7 +356,7 @@ def main(argv: Sequence[str] | None = None):
         """,
     )
     parser.add_argument(
-        "--target_dir",
+        "--target-dir",
         help="The directory for storing files.",
         type=str,
         default=None,
@@ -347,10 +371,16 @@ def main(argv: Sequence[str] | None = None):
         help="The name of the Tiled profile used for processed run reuslts data.",
     )
     # Arguments for filtering runs
+    # parser.add_argument(
+    #     "--all",
+    #     help="Also include scans that did not complete successfully.",
+    #     action="store_true",
+    # )
     parser.add_argument(
-        "--all",
-        help="Also include scans that did not complete successfully.",
-        action="store_true",
+        "--exit-status",
+        help="Export runs with specific exit status.",
+        default="success",
+        choices=["success", "fail", "abort", "all"],
     )
     parser.add_argument("--plan", help="Export runs with plan name.", type=str)
     parser.add_argument("--sample", help="Export runs with this sample name.", type=str)
@@ -360,6 +390,9 @@ def main(argv: Sequence[str] | None = None):
         type=str,
     )
     parser.add_argument("--scan", help="Export runs with this scan name.", type=str)
+    parser.add_argument(
+        "--edge", help="Export runs that contain the given X-ray edge. E.g. 'Ni-K'"
+    )
     parser.add_argument(
         "--dm-exp",
         help="Export runs associated with this data management (DM) experiment.",
@@ -392,17 +425,28 @@ def main(argv: Sequence[str] | None = None):
     parser.add_argument(
         "--max-runs",
         type=int,
-        default=200,
+        default=1,
         help="The maximum number of runs expected as the results of the given queries. This is to prevent accidental dumps of an excessive number of runs.",
     )
 
     args = parser.parse_args(argv)
     asyncio.run(
         export_runs(
-            run_uid=args.uid,
             target_dir=args.target_dir,
-            force=args.force,
+            run_uid=args.uid,
+            exit_status=None if args.exit_status == "all" else args.exit_status,
+            plan_name=args.plan,
+            sample_name=args.sample,
+            sample_formula=args.formula,
+            scan_name=args.scan,
+            xray_edge=args.edge,
+            dm_exp=args.dm_exp,
+            beamline=args.beamline,
+            before=args.before,
+            after=args.after,
             raw_profile=args.raw_profile or "",
             results_profile=args.results_profile or "",
+            force=args.force,
+            max_runs=args.max_runs,
         )
     )

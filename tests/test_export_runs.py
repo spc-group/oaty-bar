@@ -26,7 +26,7 @@ def test_export_run_by_uid(tmp_path, xafs_run, mocker, prefect_server):
             [
                 "--uid",
                 "7d1daf1d-60c7-4aa7-a668-d1cd97e5335f",
-                "--target_dir",
+                "--target-dir",
                 str(tmp_path),
                 "--raw-profile",
                 "raw_catalog",
