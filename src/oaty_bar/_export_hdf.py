@@ -10,13 +10,11 @@ from typing import IO, Any
 
 import h5py
 import numpy as np
-from prefect import flow, task
+from prefect import task
 from prefect.artifacts import create_link_artifact
 from prefect.logging import get_run_logger
-from tiled.client import from_profile
 from tiled.client.container import Container
 from tiled.client.dataframe import DataFrameClient
-from tiled.queries import Eq
 from tiled.server.schemas import DataSource
 from tiled.utils import SerializationError
 
@@ -107,7 +105,6 @@ async def write_run(
     nxfile: h5py.File,
     run: Container,
     force: bool,
-    semaphore: asyncio.Semaphore,
 ):
     """Write a run to the HDF file as a nexus-compatiable entry.
 
@@ -131,9 +128,7 @@ async def write_run(
         streams = run
     async with asyncio.TaskGroup() as tg:
         coros = [
-            write_event_stream(
-                name=stream_name, node=stream_node, entry=entry, semaphore=semaphore
-            )
+            write_event_stream(name=stream_name, node=stream_node, entry=entry)
             for stream_name, stream_node in streams.items()
         ]
         tasks = [tg.create_task(coro) for coro in coros]
@@ -145,7 +140,6 @@ async def write_results(
     entry: h5py.Group,
     run: Container,
     force: bool,
-    semaphore: asyncio.Semaphore,
 ):
     """Write a run of results to the HDF file as a nexus-compatiable
     entry.
@@ -175,7 +169,6 @@ async def write_results(
                         name=node_name,
                         node=node,
                         parent_group=results_group,
-                        semaphore=semaphore,
                     )
                 )
             )
@@ -279,9 +272,8 @@ def insert_data_source(parent: h5py.Group, source: DataSource):
         start = stop
 
 
-async def write_array_slice(source, slc, dest, semaphore: asyncio.Semaphore):
-    async with semaphore:
-        arr = await asyncio.to_thread(source.read, slc)
+async def write_array_slice(source, slc, dest):
+    arr = await asyncio.to_thread(source.read, slc)
     dest[slc] = arr
 
 
@@ -290,7 +282,6 @@ async def write_data_key(
     data_key: Mapping[str, Any],
     stream_node: Container,
     stream_group: h5py.Group,
-    semaphore: asyncio.Semaphore,
 ) -> h5py.Group:
     """Load the data from the API and write it to an HDF5 group."""
     log = get_run_logger()
@@ -299,15 +290,14 @@ async def write_data_key(
     loop = asyncio.get_running_loop()
     ndims = len(data_key.get("shape", []))
     if col_name not in stream_node.keys():
-        stream_path = '/'.join(stream_node.path_parts)
+        stream_path = "/".join(stream_node.path_parts)
         log.warning(f"Signal '{col_name}' not found in stream {stream_path}. Skipping.")
         return
     if ndims < 3:
         # Simple array, easier to load all at once
-        async with semaphore:
-            xarr = await loop.run_in_executor(
-                None, stream_node.read, [col_name, f"ts_{col_name}"]
-            )
+        xarr = await loop.run_in_executor(
+            None, stream_node.read, [col_name, f"ts_{col_name}"]
+        )
         nxfield(data_group, "value", xarr[col_name])
     else:
         array_node = stream_node[col_name]
@@ -328,17 +318,13 @@ async def write_data_key(
         )
         # Load slices in parallel
         coros = [
-            write_array_slice(array_node, slc, array_group, semaphore=semaphore)
-            for slc in range(shape[0])
+            write_array_slice(array_node, slc, array_group) for slc in range(shape[0])
         ]
         log.info(f"Loading {ndims}-D array '{stream_name}/{col_name}'")
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(coro) for coro in coros]
         # Read just the timestamp for setting later
-        async with semaphore:
-            xarr = await loop.run_in_executor(
-                None, stream_node.read, [f"ts_{col_name}"]
-            )
+        xarr = await loop.run_in_executor(None, stream_node.read, [f"ts_{col_name}"])
     # Set timestamps if we can, but not every array has timestamp information
     timestamps = xarr.get(f"ts_{col_name}")
     if timestamps is not None:
@@ -355,21 +341,16 @@ async def write_data_key(
         data_group["value"].attrs["units"] = data_key["units"]
 
 
-async def write_table(
-    name: str, node, parent_group: h5py.Group, semaphore: asyncio.Semaphore
-) -> h5py.Group:
+async def write_table(name: str, node, parent_group: h5py.Group) -> h5py.Group:
     """Write a Tiled table to the HDF file."""
     table_group = nxnote(parent_group, name)
-    async with semaphore:
-        df = await asyncio.to_thread(node.read)
+    df = await asyncio.to_thread(node.read)
     for series_name, series in df.items():
         data_group = nxdata(table_group, series_name)
         nxfield(data_group, "value", series.values)
 
 
-async def write_event_stream(
-    name: str, node, entry: h5py.Group, semaphore: asyncio.Semaphore
-) -> h5py.Group:
+async def write_event_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
     """Write a stream to the HDF file as a nexus-compatiable entry.
 
     *node* should be the container for this stream. E.g.
@@ -410,7 +391,6 @@ async def write_event_stream(
                 data_key,
                 stream_node=node,
                 stream_group=stream_group,
-                semaphore=semaphore,
             )
             for col_name, data_key in data_keys.items()
         ]
@@ -444,7 +424,6 @@ async def serialize_hdf(
     run: Container,
     results_runs: Container | None = None,
     *,
-    semaphore: asyncio.Semaphore,
     force: bool = False,
 ):
     """Encode a bluesky run into an HDF5 file with NeXus annotations.
@@ -465,15 +444,10 @@ async def serialize_hdf(
             description=f"# Exported HDF5 File\n\nRun UID: '{uid}'.\n",
         )
         # Write data entry to the nexus file
-        entry = await write_run(
-            nxfile=nxfile, run=run, force=force, semaphore=semaphore
-        )
+        entry = await write_run(nxfile=nxfile, run=run, force=force)
         # Write the results after the initial raw data have been written
         results = results_runs.values() if results_runs is not None else []
-        coros = [
-            write_results(entry=entry, run=run, force=force, semaphore=semaphore)
-            for run in results
-        ]
+        coros = [write_results(entry=entry, run=run, force=force) for run in results]
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(coro) for coro in coros]
 

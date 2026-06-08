@@ -48,13 +48,13 @@ deployments:
     name: "compute"
     work_queue_name: null
     job_variables: {}
-- name: export
-  version: "2"
+- name: export-runs
+  version: "3"
   tags: []
   description: "Export files for runs from Tiled."
   schedule: {}
-  flow_name: "export-run"
-  entrypoint: "src/oaty_bar/_export_run.py:export_run"
+  flow_name: "export-runs"
+  entrypoint: "src/oaty_bar/_export_runs.py:export_runs"
   parameters: {}
   work_pool:
     name: "gdata"

@@ -41,6 +41,7 @@ class DataManagementStation(Block):
       The URI of the workflow processing (DAQ) API.
 
     """
+
     username: str
     password: SecretStr
     station_name: str

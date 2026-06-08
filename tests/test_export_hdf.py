@@ -1,4 +1,3 @@
-import asyncio
 import io
 from pathlib import Path
 from typing import IO
@@ -7,10 +6,10 @@ from unittest import mock
 import h5py
 import numpy as np
 import pandas as pd
-from prefect import flow
 import pytest
 import pytest_asyncio
 from nexusformat.nexus import NXFile
+from prefect import flow
 
 from oaty_bar._export_hdf import (
     nxexternallink,
@@ -192,22 +191,18 @@ class NexusIO(NXFile):
 
 
 @pytest_asyncio.fixture()
-async def nxfile(xafs_run, semaphore):
+async def nxfile(xafs_run):
     # Generate the headers
     buff = io.BytesIO()
+
     @flow()
     async def do():
-        await serialize_hdf(buff, xafs_run, semaphore=semaphore)
+        await serialize_hdf(buff, xafs_run)
 
     await do()
     with NexusIO(buff, mode="r") as fd:
         # Write data entry to the nexus file
         yield fd
-
-
-@pytest.fixture()
-def semaphore():
-    return asyncio.Semaphore(9999)
 
 
 def test_xafs_specification(nxfile):
@@ -228,7 +223,7 @@ def test_file_structure(nxfile):
 
 
 @pytest.mark.asyncio
-async def test_missing_hints(xafs_run, semaphore):
+async def test_missing_hints(xafs_run):
     """Make sure the stream still writes if there are not hints."""
     node = mock.AsyncMock()
     node.metadata = {
@@ -239,7 +234,6 @@ async def test_missing_hints(xafs_run, semaphore):
         name="primary",
         node=node,
         entry=mock.MagicMock(),
-        semaphore=semaphore,
     )
 
 
@@ -274,14 +268,12 @@ def test_nxexternallink_targets():
 
 
 @pytest.mark.asyncio
-async def test_export_results(xafs_run, results_catalog, mocker, semaphore):
+async def test_export_results(xafs_run, results_catalog, mocker):
     buff = io.BytesIO()
 
     @flow()
     async def do():
-        await serialize_hdf(
-            buff, xafs_run, results_runs=results_catalog, semaphore=semaphore
-        )
+        await serialize_hdf(buff, xafs_run, results_runs=results_catalog)
 
     await do()
     with h5py.File(buff, mode="r") as fd:

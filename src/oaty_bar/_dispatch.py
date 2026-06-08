@@ -31,7 +31,7 @@ async def process_msg(msg: str, instance_uuid: str):
     resource = {
         "prefect.resource.id": f"oaty-bar.dispatcher.{instance_uuid}",
         "bluesky.run.uid": uid,
-        "aps.beamline.id": metadata.get('start', {}).get("beamline_id", ""),
+        "aps.beamline.id": metadata.get("start", {}).get("beamline_id", ""),
     }
     log.info(f"Emitting events for resource: {resource}")
     emit_event("bluesky.run.stopped", resource=resource, payload=payload)
