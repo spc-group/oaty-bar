@@ -290,7 +290,7 @@ async def export_runs(
     # Start the exporters in parallel
     do_export = partial(
         _export_run,
-        target_dir=str(target_dir),
+        target_dir=str(target_dir) if target_dir is not None else target_dir,
         raw_profile=raw_profile,
         results_profile=results_profile,
         force=force,
