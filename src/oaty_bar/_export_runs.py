@@ -122,7 +122,18 @@ async def _export_run(
         log.warning("No results profile specified, only raw data will be exported.")
         results_runs = None
     # DM experiments contain the export path, which is our default
+    start_doc = run.metadata.get("start", {})
     if not target_dir:
+        if "beamline_id" not in start_doc:
+            log.warning(
+                f"No 'beamline_id' in metadata for run '{run_uid}', specify a *target_dir*."
+            )
+            return
+        if "dm_exp" not in start_doc:
+            log.warning(
+                f"No 'dm_exp' in metadata for run '{run_uid}', specify a *target_dir*."
+            )
+            return
         beamline_id = run.metadata["start"]["beamline_id"]
         exp_name = run.metadata["start"]["dm_exp"]
         target_dir_ = Path("/net/s25data/export") / beamline_id / exp_name
@@ -290,7 +301,7 @@ async def export_runs(
     # Start the exporters in parallel
     do_export = partial(
         _export_run,
-        target_dir=str(target_dir) if target_dir is not None else target_dir,
+        target_dir=str(target_dir) if target_dir is not None else "",
         raw_profile=raw_profile,
         results_profile=results_profile,
         force=force,
