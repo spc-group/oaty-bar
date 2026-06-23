@@ -94,7 +94,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/27/cd/c883e1a7c447479d6e13985565080e3fea88ab5a107c21684c813dba1875/flexcache-0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/28/a2/2dd20812672b7dfa7e7f382c149c996c4f7cf1a691b8c904379ec26113a7/mp_api-0.46.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/2a/61/0b9e435992c6c931f51509ff2fe411852ee1776a6465a96f87ffab2c5420/bluesky_tiled_plugins-2.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2b/76/7f1bfd6afff4c5e38e36a3c6d68eb5f4b7311ea80baf693db78d95b603c4/propcache-0.5.2-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/2c/58/ca301544e1fa93ed4f80d724bf5b194f6e4b945841c5bfd555878eea9fcb/referencing-0.37.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2e/66/70786ee1cfdd03d36d456c4ef02a35506b7ae256c70a74bd7abf135daba0/arro3_core-0.8.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -172,11 +171,11 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/77/39/4d8414260c3d83f22029a39e51553c173611b378d62ca391e5ca68e65cfa/awkward-2.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/77/96/4efd6fa5c62c85426a0c19077a586258ebc3a2a146ff2493e4312a697a22/greenlet-3.5.1-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/79/b7/78129e95be6e19fa59776b613fc1709ffcd892bbea8291f92a3bae2c2a6a/bluesky_tiled_plugins-2.0.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7a/0a/d39ab66fb8be334524dc29b18f08b64ba2efe3190f8997d7266d748afd1f/fabio-2025.10.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/7b/44/4e421b96b67b2daff264473f7465db72fbdf36a07e05494f50300cc7b0c6/rfc3339_validator-0.1.4-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7b/91/984aca2ec129e2757d1e4e3c81c3fcda9d0f85b74670a094cc443d9ee949/joblib-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7c/25/7400c18c3ee97914cc99c90007795c00a4ec5b60c853b49db7ba24d11179/sqlalchemy_utils-0.42.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/7c/6c/d73434912826f1a6db24d9c010984a8274dd041bcbf3dca72a2319b5f6a9/tiled-0.2.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7c/8a/3076c496ca8dafe0e8cd03fcebdfc47be4b1174b4e5b24ff6e396e6b3af2/watchfiles-1.2.0-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/7e/41/e334180c1ba6f4ef1b20c6551e90aa3267d2996cff9e3f655425f35a49a9/blosc2-4.3.3-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl
@@ -262,6 +261,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/aa/ab2d6d68c3ee50f6dedbbc91a31cd38f9fede9258d54e7aca29bfca4ebc1/awkward_cpp-52-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/ca/f8/93c681d2ccd5b0e70db58998b0f61a7bf52ccf6b9e199d5055c49ef37959/adbc_driver_postgresql-1.11.0-py3-none-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/cb/c1/fb2c66d92b5d0167c57042b784456ee3f8531a997726c88cf6f012a22da6/json_merge_patch-0.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/cc/95/f908e8f93f4df9eb18ed8b470f152cccb6d9349c412439aa594d898ee23d/tiled-0.2.12-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/33/7ce3f09d91a0ca5db7cca67671d865b7c8310b8b59eff287a711919641f0/mongoquery-1.4.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/81/9a91c0111ce1758c92516a3e44776920b579d9a7c09b2b06b642d4de3f0f/rpds_py-0.30.0-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/ce/e4/dccd7f47c4b64213ac01ef921a1337ee6e30e8c6466046018326977efd95/tzdata-2026.2-py2.py3-none-any.whl
@@ -311,6 +311,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/fd/7b/122376b1fd3c62c1ed9dc80c931ace4844b3c55407b6fb2d199377c9736f/pydantic-2.13.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fe/3b/8ec5074bcfc450fe84273713b4b0a0dd47c0249358f5d82eb8104ffe2520/multidict-6.7.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/fe/5e/3be305568fe5f34448807976dc82fc151d76c3e0e03958f34770286278c1/flexparser-0.4-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ff/eb/e7d23686c85d8cf6f9158f36b3a30bd717448b11ccbca75a5955a06e4459/ragged-0.3.0-py3-none-any.whl
   dev:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -412,7 +413,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/27/cd/c883e1a7c447479d6e13985565080e3fea88ab5a107c21684c813dba1875/flexcache-0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/28/a2/2dd20812672b7dfa7e7f382c149c996c4f7cf1a691b8c904379ec26113a7/mp_api-0.46.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/2a/61/0b9e435992c6c931f51509ff2fe411852ee1776a6465a96f87ffab2c5420/bluesky_tiled_plugins-2.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2b/76/7f1bfd6afff4c5e38e36a3c6d68eb5f4b7311ea80baf693db78d95b603c4/propcache-0.5.2-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/2c/58/ca301544e1fa93ed4f80d724bf5b194f6e4b945841c5bfd555878eea9fcb/referencing-0.37.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2e/66/70786ee1cfdd03d36d456c4ef02a35506b7ae256c70a74bd7abf135daba0/arro3_core-0.8.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -502,11 +502,11 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/77/f5/21d2de20e8b8b0408f0681956ca2c69f1320a3848ac50e6e7f39c6159675/babel-2.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/79/7b/2c79738432f5c924bef5071f933bcc9efd0473bac3b4aa584a6f7c1c8df8/mypy_extensions-1.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/79/b7/78129e95be6e19fa59776b613fc1709ffcd892bbea8291f92a3bae2c2a6a/bluesky_tiled_plugins-2.0.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7a/0a/d39ab66fb8be334524dc29b18f08b64ba2efe3190f8997d7266d748afd1f/fabio-2025.10.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/7b/44/4e421b96b67b2daff264473f7465db72fbdf36a07e05494f50300cc7b0c6/rfc3339_validator-0.1.4-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7b/91/984aca2ec129e2757d1e4e3c81c3fcda9d0f85b74670a094cc443d9ee949/joblib-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7c/25/7400c18c3ee97914cc99c90007795c00a4ec5b60c853b49db7ba24d11179/sqlalchemy_utils-0.42.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/7c/6c/d73434912826f1a6db24d9c010984a8274dd041bcbf3dca72a2319b5f6a9/tiled-0.2.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7c/8a/3076c496ca8dafe0e8cd03fcebdfc47be4b1174b4e5b24ff6e396e6b3af2/watchfiles-1.2.0-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/7e/41/e334180c1ba6f4ef1b20c6551e90aa3267d2996cff9e3f655425f35a49a9/blosc2-4.3.3-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/7e/b3/6b4067be973ae96ba0d615946e314c5ae35f9f993eca561b356540bb0c2b/alabaster-1.0.0-py3-none-any.whl
@@ -597,6 +597,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/f8/93c681d2ccd5b0e70db58998b0f61a7bf52ccf6b9e199d5055c49ef37959/adbc_driver_postgresql-1.11.0-py3-none-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/cb/c1/fb2c66d92b5d0167c57042b784456ee3f8531a997726c88cf6f012a22da6/json_merge_patch-0.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/cc/95/f908e8f93f4df9eb18ed8b470f152cccb6d9349c412439aa594d898ee23d/tiled-0.2.12-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/33/7ce3f09d91a0ca5db7cca67671d865b7c8310b8b59eff287a711919641f0/mongoquery-1.4.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/81/9a91c0111ce1758c92516a3e44776920b579d9a7c09b2b06b642d4de3f0f/rpds_py-0.30.0-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/ce/e4/dccd7f47c4b64213ac01ef921a1337ee6e30e8c6466046018326977efd95/tzdata-2026.2-py2.py3-none-any.whl
@@ -649,6 +650,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/fd/7b/122376b1fd3c62c1ed9dc80c931ace4844b3c55407b6fb2d199377c9736f/pydantic-2.13.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fe/3b/8ec5074bcfc450fe84273713b4b0a0dd47c0249358f5d82eb8104ffe2520/multidict-6.7.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/fe/5e/3be305568fe5f34448807976dc82fc151d76c3e0e03958f34770286278c1/flexparser-0.4-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ff/eb/e7d23686c85d8cf6f9158f36b3a30bd717448b11ccbca75a5955a06e4459/ragged-0.3.0-py3-none-any.whl
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
@@ -2196,18 +2198,6 @@ packages:
   - socksio==1.* ; extra == 'socks'
   - zstandard>=0.18.0 ; extra == 'zstd'
   requires_python: '>=3.8'
-- pypi: https://files.pythonhosted.org/packages/2a/61/0b9e435992c6c931f51509ff2fe411852ee1776a6465a96f87ffab2c5420/bluesky_tiled_plugins-2.0.3-py3-none-any.whl
-  name: bluesky-tiled-plugins
-  version: 2.0.3
-  sha256: 96bae120b7e819463e83ae334094037e5de0f7a8adc4e245335b69f4a0a3fda0
-  requires_dist:
-  - dask
-  - event-model
-  - mongoquery
-  - pytz
-  - tiled[client]>=0.2.0
-  - tzlocal
-  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/2b/76/7f1bfd6afff4c5e38e36a3c6d68eb5f4b7311ea80baf693db78d95b603c4/propcache-0.5.2-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
   name: propcache
   version: 0.5.2
@@ -3495,6 +3485,18 @@ packages:
   version: 1.1.0
   sha256: 1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505
   requires_python: '>=3.8'
+- pypi: https://files.pythonhosted.org/packages/79/b7/78129e95be6e19fa59776b613fc1709ffcd892bbea8291f92a3bae2c2a6a/bluesky_tiled_plugins-2.0.6-py3-none-any.whl
+  name: bluesky-tiled-plugins
+  version: 2.0.6
+  sha256: c07e60b5e79db7fa6a2c0438c6533cb4a07b9ad8fd1127b1e49cf490e1c0259f
+  requires_dist:
+  - dask
+  - event-model
+  - mongoquery
+  - pytz
+  - tiled[client]>=0.2.9
+  - tzlocal
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/7a/0a/d39ab66fb8be334524dc29b18f08b64ba2efe3190f8997d7266d748afd1f/fabio-2025.10.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
   name: fabio
   version: 2025.10.0
@@ -3581,193 +3583,6 @@ packages:
   - furl>=0.4.1 ; extra == 'test-all'
   - cryptography>=0.6 ; extra == 'test-all'
   requires_python: '>=3.9'
-- pypi: https://files.pythonhosted.org/packages/7c/6c/d73434912826f1a6db24d9c010984a8274dd041bcbf3dca72a2319b5f6a9/tiled-0.2.10-py3-none-any.whl
-  name: tiled
-  version: 0.2.10
-  sha256: aacdb47ccbac73f6ea1922339299dad6d5e855669db8c736f2a0d53d24ce0861
-  requires_dist:
-  - httpx>=0.20.0,!=0.23.1
-  - json-merge-patch
-  - jsonpatch
-  - jsonschema
-  - msgpack>=1.0.0
-  - orjson
-  - platformdirs
-  - pydantic-settings>=2,<2.12.0
-  - pydantic>=2,<3
-  - pyyaml
-  - typer
-  - adbc-driver-manager ; extra == 'all'
-  - adbc-driver-postgresql ; extra == 'all'
-  - adbc-driver-sqlite ; extra == 'all'
-  - aiofiles ; extra == 'all'
-  - aiosqlite ; extra == 'all'
-  - alembic ; extra == 'all'
-  - anyio ; extra == 'all'
-  - asgi-correlation-id ; extra == 'all'
-  - asyncpg ; extra == 'all'
-  - awkward>=2.4.3 ; extra == 'all'
-  - blosc2 ; extra == 'all'
-  - cachetools ; extra == 'all'
-  - canonicaljson ; extra == 'all'
-  - dask ; extra == 'all'
-  - dask[array] ; extra == 'all'
-  - dask[dataframe] ; extra == 'all'
-  - duckdb<1.4.0 ; extra == 'all'
-  - entrypoints ; extra == 'all'
-  - fastapi>=0.132.0 ; extra == 'all'
-  - h5netcdf ; extra == 'all'
-  - h5py ; extra == 'all'
-  - hdf5plugin ; extra == 'all'
-  - jinja2 ; extra == 'all'
-  - jmespath ; extra == 'all'
-  - lz4 ; extra == 'all'
-  - minio ; extra == 'all'
-  - ndindex ; extra == 'all'
-  - numba>=0.59.0 ; extra == 'all'
-  - numcodecs ; extra == 'all'
-  - numpy ; extra == 'all'
-  - obstore ; extra == 'all'
-  - openpyxl ; extra == 'all'
-  - packaging ; extra == 'all'
-  - pandas<3 ; extra == 'all'
-  - pillow ; extra == 'all'
-  - prometheus-client ; extra == 'all'
-  - pyarrow>=14.0.1 ; extra == 'all'
-  - python-dateutil ; extra == 'all'
-  - python-jose[cryptography] ; extra == 'all'
-  - python-multipart ; extra == 'all'
-  - redis ; extra == 'all'
-  - rich ; extra == 'all'
-  - sparse>=0.15.5 ; extra == 'all'
-  - sqlalchemy[asyncio]>=2 ; extra == 'all'
-  - stamina ; extra == 'all'
-  - starlette>=0.48.0 ; extra == 'all'
-  - tifffile ; extra == 'all'
-  - uvicorn[standard] ; extra == 'all'
-  - watchfiles ; extra == 'all'
-  - xarray ; extra == 'all'
-  - zarr ; extra == 'all'
-  - zstandard ; extra == 'all'
-  - dask[array] ; extra == 'array'
-  - numpy ; extra == 'array'
-  - awkward>=2.4.3 ; extra == 'client'
-  - blosc2 ; python_full_version >= '3.10' and extra == 'client'
-  - dask[array] ; extra == 'client'
-  - dask[dataframe] ; extra == 'client'
-  - entrypoints ; extra == 'client'
-  - lz4 ; extra == 'client'
-  - ndindex ; extra == 'client'
-  - numba>=0.59.0 ; extra == 'client'
-  - numpy ; extra == 'client'
-  - pandas ; extra == 'client'
-  - pyarrow>=14.0.1 ; extra == 'client'
-  - rich ; extra == 'client'
-  - sparse>=0.15.5 ; extra == 'client'
-  - stamina ; extra == 'client'
-  - watchfiles ; extra == 'client'
-  - websockets ; extra == 'client'
-  - xarray ; extra == 'client'
-  - zstandard ; extra == 'client'
-  - blosc2 ; python_full_version >= '3.10' and extra == 'compression'
-  - lz4 ; extra == 'compression'
-  - zstandard ; extra == 'compression'
-  - dask[dataframe] ; extra == 'dataframe'
-  - pandas ; extra == 'dataframe'
-  - pyarrow>=14.0.1 ; extra == 'dataframe'
-  - h5netcdf ; extra == 'formats'
-  - h5py ; extra == 'formats'
-  - hdf5plugin ; extra == 'formats'
-  - openpyxl ; extra == 'formats'
-  - pillow ; extra == 'formats'
-  - tifffile ; extra == 'formats'
-  - entrypoints ; extra == 'minimal-client'
-  - rich ; extra == 'minimal-client'
-  - stamina ; extra == 'minimal-client'
-  - watchfiles ; extra == 'minimal-client'
-  - websockets ; extra == 'minimal-client'
-  - aiofiles ; extra == 'minimal-server'
-  - aiosqlite ; extra == 'minimal-server'
-  - alembic ; extra == 'minimal-server'
-  - anyio ; extra == 'minimal-server'
-  - asgi-correlation-id ; extra == 'minimal-server'
-  - cachetools ; extra == 'minimal-server'
-  - canonicaljson ; extra == 'minimal-server'
-  - dask ; extra == 'minimal-server'
-  - fastapi>=0.132.0 ; extra == 'minimal-server'
-  - jinja2 ; extra == 'minimal-server'
-  - jmespath ; extra == 'minimal-server'
-  - numcodecs ; extra == 'minimal-server'
-  - packaging ; extra == 'minimal-server'
-  - prometheus-client ; extra == 'minimal-server'
-  - python-dateutil ; extra == 'minimal-server'
-  - python-jose[cryptography] ; extra == 'minimal-server'
-  - python-multipart ; extra == 'minimal-server'
-  - redis ; extra == 'minimal-server'
-  - sqlalchemy[asyncio]>=2 ; extra == 'minimal-server'
-  - starlette>=0.48.0 ; extra == 'minimal-server'
-  - uvicorn[standard] ; extra == 'minimal-server'
-  - zarr ; extra == 'minimal-server'
-  - adbc-driver-manager ; extra == 'server'
-  - adbc-driver-postgresql ; extra == 'server'
-  - adbc-driver-sqlite ; extra == 'server'
-  - aiofiles ; extra == 'server'
-  - aiosqlite ; extra == 'server'
-  - alembic ; extra == 'server'
-  - anyio ; extra == 'server'
-  - asgi-correlation-id ; extra == 'server'
-  - asyncpg ; extra == 'server'
-  - awkward>=2.4.3 ; extra == 'server'
-  - blosc2 ; python_full_version >= '3.10' and extra == 'server'
-  - cachetools ; extra == 'server'
-  - canonicaljson ; extra == 'server'
-  - dask ; extra == 'server'
-  - dask[array] ; extra == 'server'
-  - dask[dataframe] ; extra == 'server'
-  - duckdb<1.4.0 ; extra == 'server'
-  - entrypoints ; extra == 'server'
-  - fastapi>=0.132.0 ; extra == 'server'
-  - h5netcdf ; extra == 'server'
-  - h5py ; extra == 'server'
-  - hdf5plugin ; extra == 'server'
-  - jinja2 ; extra == 'server'
-  - jmespath ; extra == 'server'
-  - lz4 ; extra == 'server'
-  - minio ; extra == 'server'
-  - ndindex ; extra == 'server'
-  - numba>=0.59.0 ; extra == 'server'
-  - numcodecs ; extra == 'server'
-  - numpy ; extra == 'server'
-  - obstore ; extra == 'server'
-  - openpyxl ; extra == 'server'
-  - packaging ; extra == 'server'
-  - pandas ; extra == 'server'
-  - pillow ; extra == 'server'
-  - prometheus-client ; extra == 'server'
-  - pyarrow>=14.0.1 ; extra == 'server'
-  - python-dateutil ; extra == 'server'
-  - python-jose[cryptography] ; extra == 'server'
-  - python-multipart ; extra == 'server'
-  - redis ; extra == 'server'
-  - sparse>=0.15.5 ; extra == 'server'
-  - sqlalchemy[asyncio]>=2 ; extra == 'server'
-  - stamina ; extra == 'server'
-  - starlette>=0.48.0 ; extra == 'server'
-  - tifffile ; extra == 'server'
-  - uvicorn[standard] ; extra == 'server'
-  - websockets ; extra == 'server'
-  - xarray ; extra == 'server'
-  - zarr ; extra == 'server'
-  - zstandard ; extra == 'server'
-  - ndindex ; extra == 'sparse'
-  - numba>=0.59.0 ; extra == 'sparse'
-  - pyarrow>=14.0.1 ; extra == 'sparse'
-  - sparse>=0.15.5 ; extra == 'sparse'
-  - dask[array] ; extra == 'xarray'
-  - pandas ; extra == 'xarray'
-  - pyarrow ; extra == 'xarray'
-  - xarray ; extra == 'xarray'
-  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/7c/8a/3076c496ca8dafe0e8cd03fcebdfc47be4b1174b4e5b24ff6e396e6b3af2/watchfiles-1.2.0-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
   name: watchfiles
   version: 1.2.0
@@ -4947,6 +4762,196 @@ packages:
   version: 0.3.0
   sha256: e0a593719b293ff63858ecaae3afbcb4ff0b57f785453c6783d7b0c3e2708b76
   requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/cc/95/f908e8f93f4df9eb18ed8b470f152cccb6d9349c412439aa594d898ee23d/tiled-0.2.12-py3-none-any.whl
+  name: tiled
+  version: 0.2.12
+  sha256: 7cce5cb52c9b5261915a9e3b21321a4b672c99036a6a194b41f3cec884ec4339
+  requires_dist:
+  - httpx>=0.20.0,!=0.23.1
+  - json-merge-patch
+  - jsonpatch
+  - jsonschema
+  - msgpack>=1.0.0
+  - orjson
+  - platformdirs
+  - pydantic-settings>=2,<2.12.0
+  - pydantic>=2,<3
+  - pyyaml
+  - typer
+  - adbc-driver-manager ; extra == 'all'
+  - adbc-driver-postgresql ; extra == 'all'
+  - adbc-driver-sqlite ; extra == 'all'
+  - aiofiles ; extra == 'all'
+  - aiosqlite ; extra == 'all'
+  - alembic ; extra == 'all'
+  - anyio ; extra == 'all'
+  - asgi-correlation-id ; extra == 'all'
+  - asyncpg ; extra == 'all'
+  - awkward>=2.4.3 ; extra == 'all'
+  - blosc2 ; extra == 'all'
+  - cachetools ; extra == 'all'
+  - canonicaljson ; extra == 'all'
+  - dask ; extra == 'all'
+  - dask[array] ; extra == 'all'
+  - dask[dataframe] ; extra == 'all'
+  - duckdb<1.4.0 ; extra == 'all'
+  - entrypoints ; extra == 'all'
+  - fastapi>=0.132.0 ; extra == 'all'
+  - h5netcdf ; extra == 'all'
+  - h5py ; extra == 'all'
+  - hdf5plugin ; extra == 'all'
+  - jinja2 ; extra == 'all'
+  - jmespath ; extra == 'all'
+  - lz4 ; extra == 'all'
+  - minio ; extra == 'all'
+  - ndindex ; extra == 'all'
+  - numba>=0.59.0 ; extra == 'all'
+  - numcodecs ; extra == 'all'
+  - numpy ; extra == 'all'
+  - obstore ; extra == 'all'
+  - openpyxl ; extra == 'all'
+  - packaging ; extra == 'all'
+  - pandas<3 ; extra == 'all'
+  - pillow ; extra == 'all'
+  - prometheus-client ; extra == 'all'
+  - pyarrow>=14.0.1 ; extra == 'all'
+  - python-dateutil ; extra == 'all'
+  - python-jose[cryptography] ; extra == 'all'
+  - python-multipart ; extra == 'all'
+  - ragged ; extra == 'all'
+  - redis ; extra == 'all'
+  - rich ; extra == 'all'
+  - sparse>=0.15.5 ; extra == 'all'
+  - sqlalchemy[asyncio]>=2 ; extra == 'all'
+  - stamina ; extra == 'all'
+  - starlette>=0.48.0 ; extra == 'all'
+  - tifffile ; extra == 'all'
+  - uvicorn[standard] ; extra == 'all'
+  - watchfiles ; extra == 'all'
+  - xarray ; extra == 'all'
+  - zarr ; extra == 'all'
+  - zstandard ; extra == 'all'
+  - dask[array] ; extra == 'array'
+  - numpy ; extra == 'array'
+  - awkward>=2.4.3 ; extra == 'client'
+  - blosc2 ; python_full_version >= '3.10' and extra == 'client'
+  - dask[array] ; extra == 'client'
+  - dask[dataframe] ; extra == 'client'
+  - entrypoints ; extra == 'client'
+  - lz4 ; extra == 'client'
+  - ndindex ; extra == 'client'
+  - numba>=0.59.0 ; extra == 'client'
+  - numpy ; extra == 'client'
+  - pandas ; extra == 'client'
+  - pyarrow>=14.0.1 ; extra == 'client'
+  - ragged ; extra == 'client'
+  - rich ; extra == 'client'
+  - sparse>=0.15.5 ; extra == 'client'
+  - stamina ; extra == 'client'
+  - watchfiles ; extra == 'client'
+  - websockets ; extra == 'client'
+  - xarray ; extra == 'client'
+  - zstandard ; extra == 'client'
+  - blosc2 ; python_full_version >= '3.10' and extra == 'compression'
+  - lz4 ; extra == 'compression'
+  - zstandard ; extra == 'compression'
+  - dask[dataframe] ; extra == 'dataframe'
+  - pandas ; extra == 'dataframe'
+  - pyarrow>=14.0.1 ; extra == 'dataframe'
+  - h5netcdf ; extra == 'formats'
+  - h5py ; extra == 'formats'
+  - hdf5plugin ; extra == 'formats'
+  - openpyxl ; extra == 'formats'
+  - pillow ; extra == 'formats'
+  - tifffile ; extra == 'formats'
+  - entrypoints ; extra == 'minimal-client'
+  - rich ; extra == 'minimal-client'
+  - stamina ; extra == 'minimal-client'
+  - watchfiles ; extra == 'minimal-client'
+  - websockets ; extra == 'minimal-client'
+  - aiofiles ; extra == 'minimal-server'
+  - aiosqlite ; extra == 'minimal-server'
+  - alembic ; extra == 'minimal-server'
+  - anyio ; extra == 'minimal-server'
+  - asgi-correlation-id ; extra == 'minimal-server'
+  - cachetools ; extra == 'minimal-server'
+  - canonicaljson ; extra == 'minimal-server'
+  - dask ; extra == 'minimal-server'
+  - fastapi>=0.132.0 ; extra == 'minimal-server'
+  - jinja2 ; extra == 'minimal-server'
+  - jmespath ; extra == 'minimal-server'
+  - numcodecs ; extra == 'minimal-server'
+  - packaging ; extra == 'minimal-server'
+  - prometheus-client ; extra == 'minimal-server'
+  - python-dateutil ; extra == 'minimal-server'
+  - python-jose[cryptography] ; extra == 'minimal-server'
+  - python-multipart ; extra == 'minimal-server'
+  - redis ; extra == 'minimal-server'
+  - sqlalchemy[asyncio]>=2 ; extra == 'minimal-server'
+  - starlette>=0.48.0 ; extra == 'minimal-server'
+  - uvicorn[standard] ; extra == 'minimal-server'
+  - zarr ; extra == 'minimal-server'
+  - adbc-driver-manager ; extra == 'server'
+  - adbc-driver-postgresql ; extra == 'server'
+  - adbc-driver-sqlite ; extra == 'server'
+  - aiofiles ; extra == 'server'
+  - aiosqlite ; extra == 'server'
+  - alembic ; extra == 'server'
+  - anyio ; extra == 'server'
+  - asgi-correlation-id ; extra == 'server'
+  - asyncpg ; extra == 'server'
+  - awkward>=2.4.3 ; extra == 'server'
+  - blosc2 ; python_full_version >= '3.10' and extra == 'server'
+  - cachetools ; extra == 'server'
+  - canonicaljson ; extra == 'server'
+  - dask ; extra == 'server'
+  - dask[array] ; extra == 'server'
+  - dask[dataframe] ; extra == 'server'
+  - duckdb<1.4.0 ; extra == 'server'
+  - entrypoints ; extra == 'server'
+  - fastapi>=0.132.0 ; extra == 'server'
+  - h5netcdf ; extra == 'server'
+  - h5py ; extra == 'server'
+  - hdf5plugin ; extra == 'server'
+  - jinja2 ; extra == 'server'
+  - jmespath ; extra == 'server'
+  - lz4 ; extra == 'server'
+  - minio ; extra == 'server'
+  - ndindex ; extra == 'server'
+  - numba>=0.59.0 ; extra == 'server'
+  - numcodecs ; extra == 'server'
+  - numpy ; extra == 'server'
+  - obstore ; extra == 'server'
+  - openpyxl ; extra == 'server'
+  - packaging ; extra == 'server'
+  - pandas ; extra == 'server'
+  - pillow ; extra == 'server'
+  - prometheus-client ; extra == 'server'
+  - pyarrow>=14.0.1 ; extra == 'server'
+  - python-dateutil ; extra == 'server'
+  - python-jose[cryptography] ; extra == 'server'
+  - python-multipart ; extra == 'server'
+  - ragged ; extra == 'server'
+  - redis ; extra == 'server'
+  - sparse>=0.15.5 ; extra == 'server'
+  - sqlalchemy[asyncio]>=2 ; extra == 'server'
+  - stamina ; extra == 'server'
+  - starlette>=0.48.0 ; extra == 'server'
+  - tifffile ; extra == 'server'
+  - uvicorn[standard] ; extra == 'server'
+  - websockets ; extra == 'server'
+  - xarray ; extra == 'server'
+  - zarr ; extra == 'server'
+  - zstandard ; extra == 'server'
+  - ndindex ; extra == 'sparse'
+  - numba>=0.59.0 ; extra == 'sparse'
+  - pyarrow>=14.0.1 ; extra == 'sparse'
+  - sparse>=0.15.5 ; extra == 'sparse'
+  - dask[array] ; extra == 'xarray'
+  - pandas ; extra == 'xarray'
+  - pyarrow ; extra == 'xarray'
+  - xarray ; extra == 'xarray'
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/ce/33/7ce3f09d91a0ca5db7cca67671d865b7c8310b8b59eff287a711919641f0/mongoquery-1.4.3-py3-none-any.whl
   name: mongoquery
   version: 1.4.3
@@ -5604,3 +5609,22 @@ packages:
   - pytest-cov ; extra == 'test'
   - pytest-subtests ; extra == 'test'
   requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/ff/eb/e7d23686c85d8cf6f9158f36b3a30bd717448b11ccbca75a5955a06e4459/ragged-0.3.0-py3-none-any.whl
+  name: ragged
+  version: 0.3.0
+  sha256: 55c42eaff6665e18558436cf25c991fe67247dcbe402269594868503a0f6f817
+  requires_dist:
+  - awkward>=2.6.7
+  - numpy>=1.24.0
+  - mypy ; extra == 'dev'
+  - pytest-cov>=3 ; extra == 'dev'
+  - pytest>=6 ; extra == 'dev'
+  - ruff ; extra == 'dev'
+  - furo>=2023.8.17 ; extra == 'docs'
+  - myst-parser>=0.13 ; extra == 'docs'
+  - sphinx-autodoc-typehints ; extra == 'docs'
+  - sphinx-copybutton ; extra == 'docs'
+  - sphinx>=7.0 ; extra == 'docs'
+  - pytest-cov>=3 ; extra == 'test'
+  - pytest>=6 ; extra == 'test'
+  requires_python: '>=3.10'

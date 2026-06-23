@@ -18,7 +18,7 @@ oaty-bar = { path = ".", editable = true }
 tiled = { version = ">=0.2.12, <0.3", extras = ["all"] }
 h5py = ">=3.16.0, <4"
 hdf5plugin = ">=6.0.0, <7"
-bluesky-tiled-plugins = ">=2.0.2, <3"
+bluesky-tiled-plugins = ">=2.0.6, <3"
 # For now we're using our fork of xraydb for thread safety
 # xraydb = { path = "../XrayDB/python", editable = true }
 xraydb = { git = "https://github.com/spc-group/XrayDB.git", subdirectory = "python", rev="ba46a74c6b44317e91a6a7e752938e7b648786b9" }
