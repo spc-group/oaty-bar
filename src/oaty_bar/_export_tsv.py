@@ -9,6 +9,7 @@ from typing import Any
 
 import xarray as xr
 from prefect import task
+from prefect.concurrency.asyncio import concurrency
 from tiled.client.container import Container
 from tiled.utils import SerializationError
 
@@ -148,7 +149,8 @@ async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = Fa
     stream_node = streams["primary"]
     # Get extra data
     hinted_keys = data_keys(stream_node.metadata)
-    data = await asyncio.to_thread(stream_node.read, hinted_keys.keys())
+    async with concurrency("tiled-api"):
+        data = await asyncio.to_thread(stream_node.read, hinted_keys.keys())
     xdi_text = build_xdi(
         metadata=run.metadata,
         stream_metadata=stream_node.metadata,

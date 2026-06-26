@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 from prefect import task
 from prefect.artifacts import create_link_artifact
+from prefect.concurrency.asyncio import concurrency
 from prefect.logging import get_run_logger
 from tiled.client.container import Container
 from tiled.client.dataframe import DataFrameClient
@@ -273,7 +274,8 @@ def insert_data_source(parent: h5py.Group, source: DataSource):
 
 
 async def write_array_slice(source, slc, dest):
-    arr = await asyncio.to_thread(source.read, slc)
+    async with concurrency("tiled-api"):
+        arr = await asyncio.to_thread(source.read, slc)
     dest[slc] = arr
 
 
@@ -287,7 +289,6 @@ async def write_data_key(
     log = get_run_logger()
     stream_name = stream_node.path_parts[-1]
     data_group = nxdata(stream_group, col_name)
-    loop = asyncio.get_running_loop()
     ndims = len(data_key.get("shape", []))
     if col_name not in stream_node.keys():
         stream_path = "/".join(stream_node.path_parts)
@@ -295,9 +296,10 @@ async def write_data_key(
         return
     if ndims < 3:
         # Simple array, easier to load all at once
-        xarr = await loop.run_in_executor(
-            None, stream_node.read, [col_name, f"ts_{col_name}"]
-        )
+        async with concurrency("tiled-api"):
+            xarr = await asyncio.to_thread(
+                stream_node.read, [col_name, f"ts_{col_name}"]
+            )
         nxfield(data_group, "value", xarr[col_name])
     else:
         array_node = stream_node[col_name]
@@ -324,7 +326,8 @@ async def write_data_key(
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(coro) for coro in coros]
         # Read just the timestamp for setting later
-        xarr = await loop.run_in_executor(None, stream_node.read, [f"ts_{col_name}"])
+        async with concurrency("tiled-api"):
+            xarr = await asyncio.to_thread(stream_node.read, [f"ts_{col_name}"])
     # Set timestamps if we can, but not every array has timestamp information
     timestamps = xarr.get(f"ts_{col_name}")
     if timestamps is not None:
@@ -344,7 +347,8 @@ async def write_data_key(
 async def write_table(name: str, node, parent_group: h5py.Group) -> h5py.Group:
     """Write a Tiled table to the HDF file."""
     table_group = nxnote(parent_group, name)
-    df = await asyncio.to_thread(node.read)
+    async with concurrency("tiled-api"):
+        df = await asyncio.to_thread(node.read)
     for series_name, series in df.items():
         data_group = nxdata(table_group, series_name)
         nxfield(data_group, "value", series.values)
