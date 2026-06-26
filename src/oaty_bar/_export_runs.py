@@ -7,6 +7,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import partial
+from itertools import islice
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
@@ -276,7 +277,7 @@ async def export_runs(
     if len(runs) == 0:
         raise NoRuns("No runs found matching query parameters.")
     if len(runs) > max_runs:
-        # We need to make sure
+        # We need to make sure we're not exporting too many runs
         description_md = dedent(f"""
             # Approval Needed
             
@@ -306,7 +307,7 @@ async def export_runs(
         results_profile=results_profile,
         force=force,
     )
-    coros = (do_export(run) for run in runs.values().head(max_runs))
+    coros = (do_export(run) for run in islice(runs.values(), max_runs))
     results = await asyncio.gather(*coros, return_exceptions=True)
     exceptions = [exc for exc in results if isinstance(exc, Exception)]
     if any(exceptions):
