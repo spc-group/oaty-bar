@@ -4,7 +4,7 @@ import argparse
 import asyncio
 import datetime as dt
 import re
-from collections.abc import Sequence
+from collections.abc import Coroutine, Sequence
 from dataclasses import dataclass
 from functools import partial
 from itertools import islice
@@ -82,14 +82,18 @@ class QuerySet:
         return runs
 
 
-async def _export_run(
+def _export_run_coros(
     run: BlueskyRun,
     target_dir: str | Path = "",
     raw_profile: str = "oaty-bar",
     results_profile: str = "oaty-bar-results",
     force: bool = True,
-):
-    """Export a Tiled run with UID *uid* to files in *target_dir*.
+) -> list[Coroutine]:
+    """Setup coroutines for exporting a Tiled run with UID *uid* to
+    files in *target_dir*.
+
+    The resulting coroutines must then be executed in an event loop
+    (e.g. with ``asyncio.gather()``).
 
     The names of the resulting files will be generated from the run
     metadata. They will include the first portion of the UID, so
@@ -129,12 +133,12 @@ async def _export_run(
             log.warning(
                 f"No 'beamline_id' in metadata for run '{run_uid}', specify a *target_dir*."
             )
-            return
+            return []
         if "dm_exp" not in start_doc:
             log.warning(
                 f"No 'dm_exp' in metadata for run '{run_uid}', specify a *target_dir*."
             )
-            return
+            return []
         beamline_id = run.metadata["start"]["beamline_id"]
         exp_name = run.metadata["start"]["dm_exp"]
         target_dir_ = Path("/net/s25data/export") / beamline_id / exp_name
@@ -168,12 +172,9 @@ async def _export_run(
             ),
         )
     else:
-        log.warning("Cannot make TSV or XDI file. Skipping.")
-    # Now that we've built the tasks, we can execute them in parallel
-    results = await asyncio.gather(*coros, return_exceptions=True)
-    exceptions = [exc for exc in results if isinstance(exc, Exception)]
-    if any(exceptions):
-        raise ExceptionGroup("Export runs failed", exceptions)
+        uid = run.metadata.get("start", {}).get("uid", "")
+        log.warning(f"Cannot make TSV (or XDI) file for {uid}. Skipping.")
+    return coros
 
 
 class ContinueDecision(RunInput):
@@ -300,17 +301,27 @@ async def export_runs(
                 f"Queries produced {len(runs)} runs but we're limited to {max_runs}. Either provide additional queries or increase *max_runs*."
             )
     # Start the exporters in parallel
-    do_export = partial(
-        _export_run,
-        target_dir=str(target_dir) if target_dir is not None else "",
-        raw_profile=raw_profile,
-        results_profile=results_profile,
-        force=force,
-    )
-    coros = (do_export(run) for run in islice(runs.values(), max_runs))
-    results = await asyncio.gather(*coros, return_exceptions=True)
-    exceptions = [exc for exc in results if isinstance(exc, Exception)]
-    if any(exceptions):
+    tasks = []
+    for run in islice(runs.values(), max_runs):
+        coros = _export_run_coros(
+            run=run,
+            target_dir=str(target_dir) if target_dir is not None else "",
+            raw_profile=raw_profile,
+            results_profile=results_profile,
+            force=force,
+        )
+        # await rate_limit("export-tasks", occupy=len(coros))
+        new_tasks = [asyncio.create_task(coro) for coro in coros]
+        tasks.extend(new_tasks)
+    # We want all the exports to finish before we raise exceptions
+    await asyncio.gather(*tasks)
+    exceptions_ = [task.exception() for task in tasks]
+    exceptions: list[Exception] = [
+        exc for exc in exceptions_ if isinstance(exc, Exception)
+    ]
+    if len(exceptions) == 1:
+        raise exceptions[0]
+    elif any(exceptions):
         raise ExceptionGroup("Export runs failed", exceptions)
 
 

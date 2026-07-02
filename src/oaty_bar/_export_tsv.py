@@ -9,7 +9,8 @@ from typing import Any
 
 import xarray as xr
 from prefect import task
-from prefect.concurrency.asyncio import concurrency
+from prefect.artifacts import create_link_artifact
+from prefect.concurrency.asyncio import rate_limit
 from tiled.client.container import Container
 from tiled.utils import SerializationError
 
@@ -130,7 +131,12 @@ def build_xdi(
     return xdi_text
 
 
-@task()
+@task(
+    tags=["export"],
+    retries=3,
+    retry_delay_seconds=10,
+    retry_jitter_factor=3,
+)
 async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = False):
     """Write a bluesky run as tab-separated values.
 
@@ -149,8 +155,8 @@ async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = Fa
     stream_node = streams["primary"]
     # Get extra data
     hinted_keys = data_keys(stream_node.metadata)
-    async with concurrency("tiled-api"):
-        data = await asyncio.to_thread(stream_node.read, hinted_keys.keys())
+    await rate_limit("tiled-api")
+    data = await asyncio.to_thread(stream_node.read, hinted_keys.keys())
     xdi_text = build_xdi(
         metadata=run.metadata,
         stream_metadata=stream_node.metadata,
@@ -158,5 +164,11 @@ async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = Fa
         strict=use_xdi,
     )
     with open(filepath, mode="w") as fd:
+        uid = run.metadata.get("start", {}).get("uid", "")
+        await create_link_artifact(
+            key=f"export-{uid or '<Unknown UID>'}-tsv",
+            link=f"file://{filepath}",
+            description=f"# Exported HDF5 File\n\nRun UID: '{uid}'.\n",
+        )
         fd.write(xdi_text)
     return xdi_text
