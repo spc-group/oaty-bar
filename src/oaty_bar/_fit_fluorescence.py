@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+import multiprocessing
 import time
 from asyncio import TaskGroup
 from collections.abc import Mapping, Sequence
@@ -145,63 +146,67 @@ async def fit_frame(
     elements: Mapping[str, int | float],
     detector_material: str,
     detector_thickness: Quantity,
+    lock: asyncio.Semaphore,
 ):
     log = get_run_logger()
     loop = asyncio.get_running_loop()
     array_name = node.path_parts[-1]
     elem_indices = list(range(node.shape[1]))
     # Read livetime correction data along with the frame itself
-    async with TaskGroup() as tg:
-        clock_freq = 80e6
-        coros = [
-            read_frame(
-                node.parent, f"{array_name}-element{elem}-deadtime_factor", frame_num
+    async with lock:
+        async with TaskGroup() as tg:
+            clock_freq = 80e6
+            coros = [
+                read_frame(
+                    node.parent,
+                    f"{array_name}-element{elem}-deadtime_factor",
+                    frame_num,
+                )
+                for elem in elem_indices
+            ]
+            dt_tasks = [tg.create_task(coro) for coro in coros]
+            coros = [
+                read_frame(
+                    node.parent, f"{array_name}-element{elem}-clock_ticks", frame_num
+                )
+                for elem in elem_indices
+            ]
+            clock_tasks = [tg.create_task(coro) for coro in coros]
+            frame_task = tg.create_task(
+                read_frame(node.parent, name=array_name, slice=frame_num)
             )
-            for elem in elem_indices
-        ]
-        dt_tasks = [tg.create_task(coro) for coro in coros]
-        coros = [
-            read_frame(
-                node.parent, f"{array_name}-element{elem}-clock_ticks", frame_num
-            )
-            for elem in elem_indices
-        ]
-        clock_tasks = [tg.create_task(coro) for coro in coros]
-        frame_task = tg.create_task(
-            read_frame(node.parent, name=array_name, slice=frame_num)
-        )
-    frame = frame_task.result()
-    dt_factors = np.asarray([task.result() for task in dt_tasks])
-    ticks = np.asarray([task.result() for task in clock_tasks])
-    times = ticks / clock_freq
-    # Xraydb seems to have a race condition when we get detector
-    # material properties in multiple threads. So try to prime the
-    # database here.
-    detector_mu = xraydb.material_mu(detector_material, energy)
-    # log.info(f"µ({energy}) for {detector_material} = {detector_mu}")
-    # Do the actual fitting here
-    async with TaskGroup() as tg:
-        models = [
-            xrf_model(
-                xray_energy=energy / 1000,
-                energy_max=40,
-                elements=elements,
-                detector_material=detector_material,
-                detector_thickness=detector_thickness,
-            )
-            for i in range(frame.shape[0])
-        ]
-        coros = [
-            _fit_spectrum(
-                spectrum,
-                ev_per_bin,
-                deadtime_factor=dt,
-                acquisition_time=time,
-                model=model,
-            )
-            for spectrum, dt, time, model in zip(frame, dt_factors, times, models)
-        ]
-        tasks = [tg.create_task(coro) for coro in coros]
+        frame = frame_task.result()
+        dt_factors = np.asarray([task.result() for task in dt_tasks])
+        ticks = np.asarray([task.result() for task in clock_tasks])
+        times = ticks / clock_freq
+        # Xraydb seems to have a race condition when we get detector
+        # material properties in multiple threads. So try to prime the
+        # database here.
+        detector_mu = xraydb.material_mu(detector_material, energy)
+        # log.info(f"µ({energy}) for {detector_material} = {detector_mu}")
+        # Do the actual fitting here
+        async with TaskGroup() as tg:
+            models = [
+                xrf_model(
+                    xray_energy=energy / 1000,
+                    energy_max=40,
+                    elements=elements,
+                    detector_material=detector_material,
+                    detector_thickness=detector_thickness,
+                )
+                for i in range(frame.shape[0])
+            ]
+            coros = [
+                _fit_spectrum(
+                    spectrum,
+                    ev_per_bin,
+                    deadtime_factor=dt,
+                    acquisition_time=time,
+                    model=model,
+                )
+                for spectrum, dt, time, model in zip(frame, dt_factors, times, models)
+            ]
+            tasks = [tg.create_task(coro) for coro in coros]
     results = [task.result() for task in tasks]
     return results
 
@@ -214,6 +219,7 @@ async def fit_array(
     ev_per_bin: int | float,
     detector_material: str,
     detector_thickness: Quantity,
+    lock: asyncio.Semaphore,
 ):
     """Fit an array of spectra in an array."""
     ev_per_bin = 10
@@ -229,6 +235,7 @@ async def fit_array(
                     elements=elements,
                     detector_material=detector_material,
                     detector_thickness=detector_thickness,
+                    lock=lock,
                 )
             )
             for event, energy in zip(range(node.shape[0]), energies)
@@ -323,6 +330,7 @@ async def fit_run_fluorescence(run: Container, results_catalog: Container):
     if len(elements) == 0:
         log.warning(f"Fitting 0 chemical elements for run '{run.uri}'")
     async with TaskGroup() as tg:
+        lock = asyncio.Semaphore(multiprocessing.cpu_count())
         nodes = xrf_datasets(run)
         tasks = []
         for source_node in nodes:
@@ -358,6 +366,7 @@ async def fit_run_fluorescence(run: Container, results_catalog: Container):
                 ev_per_bin=ev_per_bin,
                 detector_material=material,
                 detector_thickness=thickness,
+                lock=lock,
             )
             tasks.append(tg.create_task(coro))
     results = [task.result() for task in tasks]
