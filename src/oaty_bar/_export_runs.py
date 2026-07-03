@@ -314,6 +314,8 @@ async def export_runs(
         new_tasks = [asyncio.create_task(coro) for coro in coros]
         tasks.extend(new_tasks)
     # We want all the exports to finish before we raise exceptions
+    if len(tasks) == 0:
+        log.warning("No files to export.")
     await asyncio.gather(*tasks)
     exceptions_ = [task.exception() for task in tasks]
     exceptions: list[Exception] = [
