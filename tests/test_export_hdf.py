@@ -234,6 +234,7 @@ async def test_missing_hints(xafs_run):
         name="primary",
         node=node,
         entry=mock.MagicMock(),
+        overwrite=False,
     )
 
 
@@ -275,6 +276,27 @@ async def test_export_results(xafs_run, results_catalog, mocker):
     async def do():
         await serialize_hdf(buff, xafs_run, results_runs=results_catalog)
 
+    await do()
+    with h5py.File(buff, mode="r") as fd:
+        # Check that all datasets are in the 'results' group
+        results = fd["7d1daf1d-60c7-4aa7-a668-d1cd97e5335f/results"]
+        assert "ge_8element_fit" in results.keys()
+        assert "Ni" in results["ge_8element_fit"].keys()
+        # Check that a link is created in the 'data' group
+        # data = fd["7d1daf1d-60c7-4aa7-a668-d1cd97e5335f/data"]
+        # assert "ge_8element-Ni" in data.keys()
+
+
+@pytest.mark.asyncio
+async def test_idempotence(xafs_run, results_catalog, mocker):
+    """Can we export the same file twice with consistent results."""
+    buff = io.BytesIO()
+
+    @flow()
+    async def do():
+        await serialize_hdf(buff, xafs_run, results_runs=results_catalog, force=True)
+
+    await do()
     await do()
     with h5py.File(buff, mode="r") as fd:
         # Check that all datasets are in the 'results' group

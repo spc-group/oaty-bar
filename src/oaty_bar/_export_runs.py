@@ -13,7 +13,7 @@ from textwrap import dedent
 from typing import Any
 
 from bluesky_tiled_plugins.clients.bluesky_run import BlueskyRun
-from prefect import flow
+from prefect import flow, states
 from prefect.flow_runs import pause_flow_run
 from prefect.input import RunInput
 from prefect.logging import get_run_logger
@@ -152,6 +152,7 @@ def _export_run_coros(
             run=run,
             results_runs=results_runs,
             force=force,
+            return_state=True,
         ),
     ]
     # Not all scans are compatile with TSV exporting (e.g. fly scans)
@@ -166,9 +167,7 @@ def _export_run_coros(
         tsv_file = target_dir_ / build_file_name(run.metadata, extension=extension)
         coros.append(
             serialize_tsv(
-                filepath=tsv_file,
-                run=run,
-                use_xdi=use_xdi,
+                filepath=tsv_file, run=run, use_xdi=use_xdi, return_state=True
             ),
         )
     else:
@@ -313,18 +312,17 @@ async def export_runs(
         # await rate_limit("export-tasks", occupy=len(coros))
         new_tasks = [asyncio.create_task(coro) for coro in coros]
         tasks.extend(new_tasks)
-    # We want all the exports to finish before we raise exceptions
     if len(tasks) == 0:
         log.warning("No files to export.")
     await asyncio.gather(*tasks)
-    exceptions_ = [task.exception() for task in tasks]
-    exceptions: list[Exception] = [
-        exc for exc in exceptions_ if isinstance(exc, Exception)
-    ]
-    if len(exceptions) == 1:
-        raise exceptions[0]
-    elif any(exceptions):
-        raise ExceptionGroup("Export runs failed", exceptions)
+    # If any one task run failed, then the whole flow run has failed
+    # so we can be notified
+    task_states = [task.result() for task in tasks]
+    failed_states = [state.is_failed() for state in task_states]
+    if any(failed_states):
+        return states.Failed(
+            message="Errors while exporting {len(failed_states)}/{len(task_states)} files."
+        )
 
 
 def parse_metadata(md):

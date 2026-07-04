@@ -23,7 +23,7 @@ log = logging.getLogger("oaty-bar")
 
 
 def nxgroup(
-    parent: h5py.Group, name: str, nx_class: str | None = None, exist_ok: bool = False
+    parent: h5py.Group, name: str, nx_class: str | None = None, exist_ok: bool = True
 ) -> h5py.Group:
     if name in parent and exist_ok:
         return parent[name]
@@ -35,7 +35,10 @@ def nxgroup(
 
 
 def nxentry(parent: h5py.Group, name: str) -> h5py.Group:
-    return nxgroup(parent=parent, name=name, nx_class="NXentry")
+    if name in parent.keys():
+        return parent[name]
+    else:
+        return nxgroup(parent=parent, name=name, nx_class="NXentry")
 
 
 def nxdata(parent: h5py.Group, name: str) -> h5py.Group:
@@ -46,7 +49,7 @@ def nxinstrument(parent: h5py.Group, name: str) -> h5py.Group:
     return nxgroup(parent=parent, name=name, nx_class="NXinstrument")
 
 
-def nxnote(parent: h5py.Group, name: str, exist_ok: bool = False) -> h5py.Group:
+def nxnote(parent: h5py.Group, name: str, exist_ok: bool = True) -> h5py.Group:
     return nxgroup(parent=parent, name=name, nx_class="NXnote", exist_ok=exist_ok)
 
 
@@ -58,7 +61,10 @@ def nxfield(
     dtype=None,
     compression=None,
     chunks=None,
+    overwrite: bool = False,
 ) -> h5py.Dataset:
+    if name in parent.keys() and overwrite:
+        del parent[name]
     field = parent.create_dataset(
         name,
         data=value,
@@ -70,8 +76,16 @@ def nxfield(
     return field
 
 
-def nxlink(parent: h5py.Group, name: str, target: h5py.Group | str, soft=False):
+def nxlink(
+    parent: h5py.Group,
+    name: str,
+    target: h5py.Group | str,
+    soft=False,
+    overwrite: bool = False,
+):
     """Create a link between datasets within the same file."""
+    if name in parent.keys() and overwrite:
+        del parent[name]
     if soft:
         target_name = target
         link = h5py.SoftLink(target_name)
@@ -119,7 +133,7 @@ async def write_run(
     nxdata(entry, "data")
     instrument = nxinstrument(entry, "instrument")
     bluesky = nxnote(instrument, "bluesky")
-    write_metadata(run.metadata, entry=entry)
+    write_metadata(run.metadata, entry=entry, overwrite=force)
     # Write stream data
     nxnote(bluesky, "streams")
     if "streams" in run.keys():
@@ -129,19 +143,29 @@ async def write_run(
         streams = run
     async with asyncio.TaskGroup() as tg:
         coros = [
-            write_event_stream(name=stream_name, node=stream_node, entry=entry)
+            write_event_stream(
+                name=stream_name, node=stream_node, entry=entry, overwrite=force
+            )
             for stream_name, stream_node in streams.items()
         ]
         tasks = [tg.create_task(coro) for coro in coros]
-    # Write attributes
-    return entry
+    exceptions_ = [task.result()[1] for task in tasks]
+    exceptions = [exc for exc in exceptions_ if exc is not None]
+    # If any exceptions were raised, we need to return them so they can be aggregated
+    run_path = "/".join(run.path_parts)
+    exception = (
+        ExceptionGroup(f"Errors exporting raw data {run_path}.", exceptions)
+        if len(exceptions) > 0
+        else None
+    )
+    return (entry, exception)
 
 
 async def write_results(
     entry: h5py.Group,
     run: Container,
     force: bool,
-):
+) -> tuple[h5py.Group, Exception | None]:
     """Write a run of results to the HDF file as a nexus-compatiable
     entry.
 
@@ -170,10 +194,20 @@ async def write_results(
                         name=node_name,
                         node=node,
                         parent_group=results_group,
+                        overwrite=force,
                     )
                 )
             )
-    return entry
+    # If any exceptions were raised, we need to return them so they can be aggregated
+    exceptions_ = [task.result()[1] for task in tasks]
+    exceptions = [exc for exc in exceptions_ if exc is not None]
+    run_path = "/".join(run.path_parts)
+    exception = (
+        ExceptionGroup(f"Errors exporting results for {run_path}.", exceptions)
+        if len(exceptions) > 0
+        else None
+    )
+    return entry, exception
 
 
 def to_hdf_type(value):
@@ -195,7 +229,9 @@ def to_hdf_type(value):
     return new_type(value)
 
 
-def write_metadata(metadata: dict[str, Any], entry: h5py.Group):
+def write_metadata(
+    metadata: dict[str, Any], entry: h5py.Group, overwrite: bool = False
+):
     """Write run-level metadata to the Nexus file."""
     bluesky_group = entry["instrument/bluesky"]
     md_group = nxnote(bluesky_group, "metadata")
@@ -207,20 +243,48 @@ def write_metadata(metadata: dict[str, Any], entry: h5py.Group):
     items = [(key, value) for key, value in flattened.items() if value is not None]
     for key, value in items:
         value = to_hdf_type(value)
-        nxfield(md_group, key, value)
+        nxfield(md_group, key, value, overwrite=overwrite)
     # Create additional convenient links
     if "start.sample_name" in md_group.keys():
-        nxlink(parent=entry, name="sample_name", target=md_group["start.sample_name"])
-    if "start.scan_name" in md_group.keys():
-        nxlink(parent=entry, name="scan_name", target=md_group["start.scan_name"])
-    if "start.plan_name" in md_group.keys():
-        nxlink(parent=entry, name="plan_name", target=md_group["start.plan_name"])
         nxlink(
-            parent=bluesky_group, name="plan_name", target=md_group["start.plan_name"]
+            parent=entry,
+            name="sample_name",
+            target=md_group["start.sample_name"],
+            overwrite=overwrite,
+        )
+    if "start.scan_name" in md_group.keys():
+        nxlink(
+            parent=entry,
+            name="scan_name",
+            target=md_group["start.scan_name"],
+            overwrite=overwrite,
+        )
+    if "start.plan_name" in md_group.keys():
+        nxlink(
+            parent=entry,
+            name="plan_name",
+            target=md_group["start.plan_name"],
+            overwrite=overwrite,
+        )
+        nxlink(
+            parent=bluesky_group,
+            name="plan_name",
+            target=md_group["start.plan_name"],
+            overwrite=overwrite,
         )
     if "start.uid" in md_group.keys():
-        nxlink(parent=entry, name="entry_identifier", target=md_group["start.uid"])
-        nxlink(parent=bluesky_group, name="uid", target=md_group["start.uid"])
+        nxlink(
+            parent=entry,
+            name="entry_identifier",
+            target=md_group["start.uid"],
+            overwrite=overwrite,
+        )
+        nxlink(
+            parent=bluesky_group,
+            name="uid",
+            target=md_group["start.uid"],
+            overwrite=overwrite,
+        )
     for phase in ["start", "stop"]:
         if f"{phase}.time" in flattened.keys():
             timestamp = dt.datetime.fromtimestamp(flattened[f"{phase}.time"])
@@ -228,12 +292,14 @@ def write_metadata(metadata: dict[str, Any], entry: h5py.Group):
                 parent=entry,
                 name=f"{phase}_time",
                 value=timestamp.astimezone().isoformat(),
+                overwrite=overwrite,
             )
     if "start.time" in flattened.keys() and "stop.time" in flattened.keys():
         nxfield(
             parent=entry,
             name="duration",
             value=flattened["stop.time"] - flattened["start.time"],
+            overwrite=overwrite,
         )
 
 
@@ -284,8 +350,10 @@ async def write_data_key(
     data_key: Mapping[str, Any],
     stream_node: Container,
     stream_group: h5py.Group,
-) -> h5py.Group:
+    overwrite: bool,
+) -> tuple[h5py.Group, Exception | None]:
     """Load the data from the API and write it to an HDF5 group."""
+    exceptions = []
     log = get_run_logger()
     stream_name = stream_node.path_parts[-1]
     data_group = nxdata(stream_group, col_name)
@@ -293,12 +361,18 @@ async def write_data_key(
     if col_name not in stream_node.keys():
         stream_path = "/".join(stream_node.path_parts)
         log.warning(f"Signal '{col_name}' not found in stream {stream_path}. Skipping.")
-        return
+        return data_group, None
     if ndims < 3:
         # Simple array, easier to load all at once
         await rate_limit("tiled-api")
-        xarr = await asyncio.to_thread(stream_node.read, [col_name, f"ts_{col_name}"])
-        nxfield(data_group, "value", xarr[col_name])
+        try:
+            xarr = await asyncio.to_thread(
+                stream_node.read, [col_name, f"ts_{col_name}"]
+            )
+        except Exception as exc:
+            exceptions.append(exc)
+        else:
+            nxfield(data_group, "value", xarr[col_name], overwrite=overwrite)
     else:
         array_node = stream_node[col_name]
         # Create an empty array to hold the data
@@ -315,44 +389,74 @@ async def write_data_key(
             dtype=dtype,
             compression=compression,
             chunks=chunks,
+            overwrite=overwrite,
         )
         # Load slices in parallel
         coros = [
             write_array_slice(array_node, slc, array_group) for slc in range(shape[0])
         ]
         log.info(f"Loading {ndims}-D array '{stream_name}/{col_name}'")
-        async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(coro) for coro in coros]
+        try:
+            async with asyncio.TaskGroup() as tg:
+                tasks = [tg.create_task(coro) for coro in coros]
+        except Exception as exc:
+            exceptions.append(exc)
         # Read just the timestamp for setting later
         await rate_limit("tiled-api")
-        xarr = await asyncio.to_thread(stream_node.read, [f"ts_{col_name}"])
+        try:
+            xarr = await asyncio.to_thread(stream_node.read, [f"ts_{col_name}"])
+        except Exception as exc:
+            exceptions.append(exc)
     # Set timestamps if we can, but not every array has timestamp information
     timestamps = xarr.get(f"ts_{col_name}")
     if timestamps is not None:
-        nxfield(data_group, "EPOCH", timestamps)
-        nxfield(data_group, "time", timestamps - np.min(timestamps))
+        nxfield(data_group, "EPOCH", timestamps, overwrite=overwrite)
+        nxfield(
+            data_group, "time", timestamps - np.min(timestamps), overwrite=overwrite
+        )
         data_group["time"].attrs["units"] = "s"
         data_group.attrs["axes"] = "time"
     else:
         log.info(f"Could not find timestamps for dataset '{stream_name}/{col_name}'")
-
     # Extra parameters
     data_group.attrs["signal"] = "value"
     if "units" in data_key.keys():
         data_group["value"].attrs["units"] = data_key["units"]
+    # If any exceptions were raised, we need to return them so they can be aggregated
+    data_path = "/".join([*stream_node.path_parts, col_name])
+    exception = (
+        ExceptionGroup(f"Errors exporting data key {data_path}.", exceptions)
+        if len(exceptions) > 0
+        else None
+    )
+    return data_group, exception
 
 
-async def write_table(name: str, node, parent_group: h5py.Group) -> h5py.Group:
+async def write_table(
+    name: str,
+    node,
+    parent_group: h5py.Group,
+    overwrite: bool,
+) -> tuple[h5py.Group, Exception | None]:
     """Write a Tiled table to the HDF file."""
     table_group = nxnote(parent_group, name)
     await rate_limit("tiled-api")
-    df = await asyncio.to_thread(node.read)
+    try:
+        df = await asyncio.to_thread(node.read)
+    except Exception as exc:
+        return table_group, exc
     for series_name, series in df.items():
         data_group = nxdata(table_group, series_name)
-        nxfield(data_group, "value", series.values)
+        nxfield(data_group, "value", series.values, overwrite=overwrite)
+    return table_group, None
 
 
-async def write_event_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
+async def write_event_stream(
+    name: str,
+    node: Container,
+    entry: h5py.Group,
+    overwrite: bool,
+) -> tuple[h5py.Group, Exception | None]:
     """Write a stream to the HDF file as a nexus-compatiable entry.
 
     *node* should be the container for this stream. E.g.
@@ -377,7 +481,7 @@ async def write_event_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
 
     """
     metadata = node.metadata
-    stream_group = nxnote(entry["instrument/bluesky/streams"], name, exist_ok=False)
+    stream_group = nxnote(entry["instrument/bluesky/streams"], name, exist_ok=True)
     # Make sure we have access to these data
     # try:
     #     internal = node["internal"].read()
@@ -393,10 +497,13 @@ async def write_event_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
                 data_key,
                 stream_node=node,
                 stream_group=stream_group,
+                overwrite=overwrite,
             )
             for col_name, data_key in data_keys.items()
         ]
         tasks = [tg.create_task(coro) for coro in coros]
+    exceptions_ = [task.result()[1] for task in tasks]
+    exceptions = [exc for exc in exceptions_ if exc is not None]
     # Add links to the main NXdata group
     if name == "baseline":
         # We don't want to see baseline fields in the data NXdata group
@@ -411,22 +518,31 @@ async def write_event_stream(name: str, node, entry: h5py.Group) -> h5py.Group:
             # Write the link
             link_target = "/".join([stream_group.name, field, "value"])
             try:
-                nxlink(root_nxdata, link_name, link_target, soft=True)
+                nxlink(
+                    root_nxdata, link_name, link_target, soft=True, overwrite=overwrite
+                )
                 # root_nxdata[link_name] = NXlinkfield(stream_group[field]["value"])
             except RuntimeError:
                 raise SerializationError(
                     f"Could not link hinted '{name}' field: '{field}'"
                 )
-    return stream_group
+    # If any exceptions were raised, we need to return them so they can be aggregated
+    stream_path = "/".join(node.path_parts)
+    exception = (
+        ExceptionGroup(f"Errors exporting stream {stream_path}.", exceptions)
+        if len(exceptions) > 0
+        else None
+    )
+    return stream_group, exception
 
 
-@task(tags=["export"], retries=3, retry_delay_seconds=10, retry_jitter_factor=3)
+@task(tags=["export"], retries=1, retry_delay_seconds=10, retry_jitter_factor=3)
 async def serialize_hdf(
     buff: IO[bytes] | Path,
     run: Container,
     results_runs: Container | None = None,
     *,
-    force: bool = False,
+    force: bool = True,
 ):
     """Encode a bluesky run into an HDF5 file with NeXus annotations.
 
@@ -438,20 +554,26 @@ async def serialize_hdf(
         buff.seek(0)
     h5_mode = "w" if force else "x"
     log.info(f"Opening file '{buff}', in mode '{h5_mode}'")
+    uid = run.metadata.get("start", {}).get("uid", "")
     with h5py.File(buff, mode=h5_mode) as nxfile:
-        uid = run.metadata.get("start", {}).get("uid", "")
         await create_link_artifact(
             key=f"export-{uid or '<Unknown UID>'}-hdf",
             link=f"file://{nxfile.filename}",
             description=f"# Exported HDF5 File\n\nRun UID: '{uid}'.\n",
         )
         # Write data entry to the nexus file
-        entry = await write_run(nxfile=nxfile, run=run, force=force)
+        entry, run_exception = await write_run(nxfile=nxfile, run=run, force=force)
         # Write the results after the initial raw data have been written
         results = results_runs.values() if results_runs is not None else []
         coros = [write_results(entry=entry, run=run, force=force) for run in results]
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(coro) for coro in coros]
+    # If any exceptiosn were raised, return the combined exception
+    result_exceptions = [task.result()[1] for task in tasks]
+    all_exceptions = [run_exception, *result_exceptions]
+    all_exceptions = [exc for exc in all_exceptions if exc is not None]
+    if len(all_exceptions) > 0:
+        raise ExceptionGroup("Errors exporting run {uid}", all_exceptions)
 
 
 def build_file_name(metadata: Mapping[str, Any], extension=".hdf") -> str:
