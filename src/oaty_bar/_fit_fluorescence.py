@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import logging
 import multiprocessing
 import time
 from asyncio import TaskGroup
@@ -23,7 +22,6 @@ from tiled.client.array import ArrayClient
 from tiled.client.container import Container
 from tiled.queries import Eq
 
-log = logging.getLogger("oaty-bar")
 ureg = UnitRegistry()
 
 
@@ -102,6 +100,7 @@ async def _fit_spectrum(
     model: XRFModel,
 ):
     """Read and fit an individual spectrum from the array of spectra."""
+    log = get_run_logger()
     t0 = time.perf_counter()
     # Larch expects data packaged into `Group` objects
     mca = Group()
@@ -312,6 +311,7 @@ async def fit_fluorescence(
 
 
 async def fit_run_fluorescence(run: Container, results_catalog: Container):
+    log = get_run_logger()
     tasks: list[asyncio.Task] = []
     # We need a baseline energy to use for non-energy-scanning streams
     energy_signal = run.metadata.get("start", {}).get(
@@ -328,7 +328,10 @@ async def fit_run_fluorescence(run: Container, results_catalog: Container):
     results_run = _results_container(run, results_catalog)
     elements = parse_chemical_formula(run.metadata["start"].get("sample_formula", ""))
     if len(elements) == 0:
-        log.warning(f"Fitting 0 chemical elements for run '{run.uri}'")
+        log.warning(
+            f"Found 0 chemical elements for run '{run.uri}, skipping fluorescence fitting.'"
+        )
+        return
     async with TaskGroup() as tg:
         lock = asyncio.Semaphore(multiprocessing.cpu_count())
         nodes = xrf_datasets(run)
@@ -356,6 +359,7 @@ async def fit_run_fluorescence(run: Container, results_catalog: Container):
             node_name = source_node.path_parts[-1]
             coro = materialize(
                 expected_table_uri,
+                tags=["processing"],
                 asset_deps=[source_node.uri],
                 task_run_name=f"fit-xrf-{node_name}",
             )(fit_array)(

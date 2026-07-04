@@ -36,6 +36,7 @@ async def process_run(
     run = raw_catalog[run_uid]
     results_catalog = from_profile(results_profile)
     results = await asyncio.gather(
+        # For now this is just fitting fluorescence spectra, will add more later
         fit_run_fluorescence(run=run, results_catalog=results_catalog),
         return_exceptions=True,
     )
