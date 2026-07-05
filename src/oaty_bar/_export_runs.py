@@ -321,7 +321,7 @@ async def export_runs(
     failed_states = [state.is_failed() for state in task_states]
     if any(failed_states):
         return states.Failed(
-            message="Errors while exporting {len(failed_states)}/{len(task_states)} files."
+            message=f"Errors while exporting {len(failed_states)} files (out of {len(task_states)})."
         )
 
 
