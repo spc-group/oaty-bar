@@ -42,7 +42,7 @@ async def start_data_transfer(dm_exp: str, dm_station_name: str, source_path: st
     """
     dm_client = await load_client(dm_station_name)
     await dm_client.start_data_archive_queue(
-        source_directory=source_path, experiment_name=dm_exp
+        source_directory=source_path, experiment_name=dm_exp, skip=".pixi/*"
     )
 
 

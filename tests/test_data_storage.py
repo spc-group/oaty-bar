@@ -28,6 +28,11 @@ def dmax_client(mocker):
 async def test_start_data_transfer(prefect_server, local_storage, dmax_client):
     await prepare_data_storage(dm_exp="commission-1999-C0", dm_station_name="255IDZ")
     assert dmax_client.start_data_archive_queue.called
+    assert dmax_client.start_data_archive_queue.call_args.kwargs == {
+        "source_directory": f"{local_storage['255IDZ']}/commission-1999-C0",
+        "experiment_name": "commission-1999-C0",
+        "skip": ".pixi/*",
+    }
 
 
 @pytest.mark.asyncio
