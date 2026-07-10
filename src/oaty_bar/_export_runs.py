@@ -17,7 +17,7 @@ from prefect import flow, states
 from prefect.flow_runs import pause_flow_run
 from prefect.input import RunInput
 from prefect.logging import get_run_logger
-from pydantic import Field
+from pydantic import BaseModel, Field
 from tiled import queries
 from tiled.client import from_profile
 from tiled.client.container import Container
@@ -184,62 +184,92 @@ class ContinueDecision(RunInput):
     total_exports: int
 
 
+class CatalogFilters(BaseModel):
+    run_uid: str = Field(
+        default="",
+        title="Bluesky Run UID",
+        description="The UID of a Bluesky run in the Tiled catalog from which to export.",
+    )
+    exit_status: Literal["success", "fail", "abort"] | None = Field(
+        default="success",
+        title="Exit status",
+        description="Only includes runs with this exit status. None matches all scans.",
+    )
+    plan_name: str = Field(
+        default="",
+        title="Bluesky plan",
+        description="Only include runs containing this plan name.",
+    )
+    sample_name: str = Field(
+        default="",
+        title="Sample Name",
+        description="Only include runs containing this sample name.",
+    )
+    sample_formula: str = Field(
+        default="",
+        title="Chemical Formula",
+        description="Only include runs containing this chemical formula.",
+    )
+    scan_name: str = Field(
+        default="",
+        title="Scan name",
+        description="Only include runs with this scan name.",
+    )
+    xray_edge: str = Field(
+        default="",
+        title="Xray-edge",
+        description="Only include runs with that specific this x-ray absorption edge (e.g. 'Ni-K')",
+    )
+    dm_exp: str = Field(
+        default="",
+        title="Data-management experiment name",
+        description="Only include runs with this data management experiment name.",
+    )
+    beamline: str = Field(
+        default="",
+        title="Beamline",
+        description="Only include runs from this beamline.",
+    )
+    before: dt.datetime | None = Field(
+        default=None,
+        title="Before",
+        description="Only include runs stopped before this date-time.",
+    )
+    after: dt.datetime | None = Field(
+        default=None,
+        title="After",
+        description="Only include runs started after this date-time.",
+    )
+
+
 @flow()
 async def export_runs(
     target_dir: Path | None = Field(
-        default=None, description="An existing folder in which to export files."
+        default=None,
+        title="Tartget Export Folder",
+        description="An existing folder in which to export files. This path must be defined on the worker that will do the exporting, not your local file system.",
     ),
     *,
-    run_uid: str = Field(
-        default="",
-        description="The UID of a Bluesky run in the Tiled catalog from which to export.",
-    ),
-    exit_status: Literal["success", "fail", "abort"] | None = Field(
-        default="success",
-        description="Only includes runs with this exit status. None matches all scans.",
-    ),
-    plan_name: str = Field(
-        default="", description="Only include runs containing this plan name."
-    ),
-    sample_name: str = Field(
-        default="", description="Only include runs containing this sample name."
-    ),
-    sample_formula: str = Field(
-        default="", description="Only include runs containing this chemical formula."
-    ),
-    scan_name: str = Field(
-        default="", description="Only include runs with this scan name."
-    ),
-    xray_edge: str = Field(
-        default="",
-        description="Only include runs with that specific this x-ray absorption edge (e.g. 'Ni-K')",
-    ),
-    dm_exp: str = Field(
-        default="",
-        description="Only include runs with this data management experiment name.",
-    ),
-    beamline: str = Field(
-        default="", description="Only include runs from this beamline."
-    ),
-    before: dt.datetime | None = Field(
-        default=None, description="Only include runs stopped before this date-time."
-    ),
-    after: dt.datetime | None = Field(
-        default=None, description="Only include runs started after this date-time."
+    filters: CatalogFilters = CatalogFilters(
+        description="Parameters that limit the set of Bluesky runs that will be executed.",
+        title="Catalog Filters",
     ),
     raw_profile: str = Field(
         default="oaty-bar",
+        title="Raw Tiled Profile",
         description="The name of the Tiled profile to use for reading Bluesky runs.",
     ),
     results_profile: str = Field(
         default="oaty-bar-results",
+        title="Result Tiled profile",
         description="The name of the Tiled profile to use for reading processed results data.",
     ),
     force: bool = Field(
-        default=False, description="If true, overwrite existing files."
+        default=False, title="Force", description="If true, overwrite existing files."
     ),
     max_runs: int = Field(
         default=1,
+        title="Maximum Number of Runs",
         description="Require approval if the number of runs is greater than this value.",
     ),
 ):
@@ -263,17 +293,17 @@ async def export_runs(
     log = get_run_logger()
     # Get only the runs requested by the user
     queries = QuerySet(
-        before=before.timestamp() if before is not None else None,
-        after=after.timestamp() if after is not None else None,
-        exit_status=exit_status,
-        plan_name=plan_name or None,
-        sample_name=sample_name or None,
-        sample_formula=sample_formula or None,
-        scan_name=scan_name or None,
-        edge=xray_edge or None,
-        dm_exp=dm_exp or None,
-        beamline=beamline or None,
-        uid=run_uid or None,
+        before=filters.before.timestamp() if filters.before is not None else None,
+        after=filters.after.timestamp() if filters.after is not None else None,
+        exit_status=filters.exit_status,
+        plan_name=filters.plan_name or None,
+        sample_name=filters.sample_name or None,
+        sample_formula=filters.sample_formula or None,
+        scan_name=filters.scan_name or None,
+        edge=filters.xray_edge or None,
+        dm_exp=filters.dm_exp or None,
+        beamline=filters.beamline or None,
+        uid=filters.run_uid or None,
     )
     catalog = from_profile(raw_profile)
     runs = queries.apply(catalog)
@@ -456,20 +486,23 @@ def main(argv: Sequence[str] | None = None):
     )
 
     args = parser.parse_args(argv)
+    filters = CatalogFilters(
+        run_uid=args.uid,
+        exit_status=None if args.exit_status == "all" else args.exit_status,
+        plan_name=args.plan or "",
+        sample_name=args.sample or "",
+        sample_formula=args.formula or "",
+        scan_name=args.scan or "",
+        xray_edge=args.edge or "",
+        dm_exp=args.dm_exp or "",
+        beamline=args.beamline or "",
+        before=args.before,
+        after=args.after,
+    )
     asyncio.run(
         export_runs(
             target_dir=args.target_dir,
-            run_uid=args.uid,
-            exit_status=None if args.exit_status == "all" else args.exit_status,
-            plan_name=args.plan,
-            sample_name=args.sample,
-            sample_formula=args.formula,
-            scan_name=args.scan,
-            xray_edge=args.edge,
-            dm_exp=args.dm_exp,
-            beamline=args.beamline,
-            before=args.before,
-            after=args.after,
+            filters=filters,
             raw_profile=args.raw_profile or "",
             results_profile=args.results_profile or "",
             force=args.force,
