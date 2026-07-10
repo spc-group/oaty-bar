@@ -45,6 +45,7 @@ class QuerySet:
     scan_name: str | None = None
     edge: str | None = None
     proposal: str | None = None
+    dm_exp: str | None = None
     esaf: str | None = None
     beamline: str | None = None
     uid: str | None = None
@@ -67,6 +68,7 @@ class QuerySet:
             (self.proposal, queries.Eq, "start.proposal_id"),
             (self.beamline, queries.Contains, "start.beamline_id"),
             (self.esaf, queries.Eq, "start.esaf_id"),
+            (self.dm_exp, queries.Eq, "start.dm_exp"),
             (self.before, partial(queries.Comparison, "le"), "stop.time"),
             (self.after, partial(queries.Comparison, "ge"), "start.time"),
             (self.uid, queries.Eq, "start.uid"),
@@ -188,36 +190,36 @@ async def export_runs(
         default=None, description="An existing folder in which to export files."
     ),
     *,
-    run_uid: str | None = Field(
-        default=None,
+    run_uid: str = Field(
+        default="",
         description="The UID of a Bluesky run in the Tiled catalog from which to export.",
     ),
     exit_status: Literal["success", "fail", "abort"] | None = Field(
         default="success",
-        description="Only includes runs with this exit status (None matches all scans).",
+        description="Only includes runs with this exit status. None matches all scans.",
     ),
-    plan_name: str | None = Field(
-        default=None, description="Only include runs containing this plan name."
+    plan_name: str = Field(
+        default="", description="Only include runs containing this plan name."
     ),
-    sample_name: str | None = Field(
-        default=None, description="Only include runs containing this sample name."
+    sample_name: str = Field(
+        default="", description="Only include runs containing this sample name."
     ),
-    sample_formula: str | None = Field(
-        default=None, description="Only include runs containing this chemical formula."
+    sample_formula: str = Field(
+        default="", description="Only include runs containing this chemical formula."
     ),
-    scan_name: str | None = Field(
-        default=None, description="Only include runs with this scan name."
+    scan_name: str = Field(
+        default="", description="Only include runs with this scan name."
     ),
-    xray_edge: str | None = Field(
-        default=None,
+    xray_edge: str = Field(
+        default="",
         description="Only include runs with that specific this x-ray absorption edge (e.g. 'Ni-K')",
     ),
-    dm_exp: str | None = Field(
-        default=None,
+    dm_exp: str = Field(
+        default="",
         description="Only include runs with this data management experiment name.",
     ),
-    beamline: str | None = Field(
-        default=None, description="Only include runs from this beamline."
+    beamline: str = Field(
+        default="", description="Only include runs from this beamline."
     ),
     before: dt.datetime | None = Field(
         default=None, description="Only include runs stopped before this date-time."
@@ -264,13 +266,14 @@ async def export_runs(
         before=before.timestamp() if before is not None else None,
         after=after.timestamp() if after is not None else None,
         exit_status=exit_status,
-        plan_name=plan_name,
-        sample_name=sample_name,
-        sample_formula=sample_formula,
-        scan_name=scan_name,
-        edge=xray_edge,
-        beamline=beamline,
-        uid=run_uid,
+        plan_name=plan_name or None,
+        sample_name=sample_name or None,
+        sample_formula=sample_formula or None,
+        scan_name=scan_name or None,
+        edge=xray_edge or None,
+        dm_exp=dm_exp or None,
+        beamline=beamline or None,
+        uid=run_uid or None,
     )
     catalog = from_profile(raw_profile)
     runs = queries.apply(catalog)
