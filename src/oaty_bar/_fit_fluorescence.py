@@ -1,6 +1,6 @@
-import logging
 import argparse
 import asyncio
+import logging
 import multiprocessing
 import time
 from asyncio import TaskGroup
@@ -15,8 +15,8 @@ from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
 from pint import Quantity, UnitRegistry
 from prefect import flow
-from prefect.exceptions import MissingContextError
 from prefect.assets import materialize
+from prefect.exceptions import MissingContextError
 from prefect.logging import get_run_logger
 from pybaselines import Baseline
 from tiled.client import from_profile
@@ -135,7 +135,7 @@ async def _fit_spectrum(
         weights=decomp.weights,
         predicted=decomp.total,
         model=model,
-        larch_output=output
+        larch_output=output,
     )
     log.debug(f"Fit spectrum in {time.perf_counter()-t0:.2f} seconds")
     return result

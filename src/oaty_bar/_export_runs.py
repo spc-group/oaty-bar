@@ -10,13 +10,14 @@ from functools import partial
 from itertools import islice
 from pathlib import Path
 from textwrap import dedent
-from typing import Any
+from typing import Any, Literal
 
 from bluesky_tiled_plugins.clients.bluesky_run import BlueskyRun
 from prefect import flow, states
 from prefect.flow_runs import pause_flow_run
 from prefect.input import RunInput
 from prefect.logging import get_run_logger
+from pydantic import Field
 from tiled import queries
 from tiled.client import from_profile
 from tiled.client.container import Container
@@ -183,23 +184,62 @@ class ContinueDecision(RunInput):
 
 @flow()
 async def export_runs(
-    target_dir: Path | None = None,
+    target_dir: Path | None = Field(
+        default=None, description="An existing folder in which to export files."
+    ),
     *,
-    run_uid: str | None = None,
-    exit_status: str | None = "success",
-    plan_name: str | None = None,
-    sample_name: str | None = None,
-    sample_formula: str | None = None,
-    scan_name: str | None = None,
-    xray_edge: str | None = None,
-    dm_exp: str | None = None,
-    beamline: str | None = None,
-    before: dt.datetime | None = None,
-    after: dt.datetime | None = None,
-    raw_profile: str = "oaty-bar",
-    results_profile: str = "oaty-bar-results",
-    force: bool = False,
-    max_runs: int = 1,
+    run_uid: str | None = Field(
+        default=None,
+        description="The UID of a Bluesky run in the Tiled catalog from which to export.",
+    ),
+    exit_status: Literal["success", "fail", "abort"] | None = Field(
+        default="success",
+        description="Only includes runs with this exit status (None matches all scans).",
+    ),
+    plan_name: str | None = Field(
+        default=None, description="Only include runs containing this plan name."
+    ),
+    sample_name: str | None = Field(
+        default=None, description="Only include runs containing this sample name."
+    ),
+    sample_formula: str | None = Field(
+        default=None, description="Only include runs containing this chemical formula."
+    ),
+    scan_name: str | None = Field(
+        default=None, description="Only include runs with this scan name."
+    ),
+    xray_edge: str | None = Field(
+        default=None,
+        description="Only include runs with that specific this x-ray absorption edge (e.g. 'Ni-K')",
+    ),
+    dm_exp: str | None = Field(
+        default=None,
+        description="Only include runs with this data management experiment name.",
+    ),
+    beamline: str | None = Field(
+        default=None, description="Only include runs from this beamline."
+    ),
+    before: dt.datetime | None = Field(
+        default=None, description="Only include runs stopped before this date-time."
+    ),
+    after: dt.datetime | None = Field(
+        default=None, description="Only include runs started after this date-time."
+    ),
+    raw_profile: str = Field(
+        default="oaty-bar",
+        description="The name of the Tiled profile to use for reading Bluesky runs.",
+    ),
+    results_profile: str = Field(
+        default="oaty-bar-results",
+        description="The name of the Tiled profile to use for reading processed results data.",
+    ),
+    force: bool = Field(
+        default=False, description="If true, overwrite existing files."
+    ),
+    max_runs: int = Field(
+        default=1,
+        description="Require approval if the number of runs is greater than this value.",
+    ),
 ):
     """Export Tiled runs as HDF and XDI/TSV files.
 
@@ -216,45 +256,6 @@ async def export_runs(
     To avoid accidentally exporting the entire catalog, this operation
     fails if the number of runs exceeds *max_runs*. Parameters should
     be specified to specify a specific set of runs to export.
-
-    Parameters
-    ==========
-    target_dir
-      An existing folder in which to create a new HDF5 file.
-    run_uid
-      The UID of the Bluesky run to read from in the Tiled catalog.
-    exit_status
-      Only includes runs with this exit status (None matches all
-      scans).
-    plan_name
-      Only include runs containing this plan name.
-    sample_name
-      Only include runs containing this sample name.
-    sample_formula
-      Only include runs containing this chemical formula.
-    scan_name
-      Only include runs with this scan name.
-    xray_edge
-      Only include runs with that specific this x-ray absorption edge
-      (e.g. "Ni-K")
-    dm_exp
-      Only include runs with this data management experiment name.
-    beamline
-      Only include runs from this beamline.
-    before
-      Only include runs stopped before this date-time.
-    after
-      Only include runs started after this date-time.
-    force
-      If true, overwrite existing files.
-    max_runs
-      Refuse to export if the number of runs is greater than this
-      value.
-    raw_profile
-      The name of the Tiled profile to use for reading Bluesky runs.
-    results_profile
-      The name of the Tiled profile to use for reading processed
-      results data.
 
     """
     log = get_run_logger()
