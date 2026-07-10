@@ -1,3 +1,4 @@
+import logging
 import argparse
 import asyncio
 import multiprocessing
@@ -14,6 +15,7 @@ from larch import Group
 from larch.xrf.xrf_model import XRF_Model as XRFModel
 from pint import Quantity, UnitRegistry
 from prefect import flow
+from prefect.exceptions import MissingContextError
 from prefect.assets import materialize
 from prefect.logging import get_run_logger
 from pybaselines import Baseline
@@ -31,6 +33,7 @@ class FitResult:
     weights: Mapping[str, float]
     predicted: np.ndarray
     model: XRFModel
+    larch_output: Group
 
 
 def parse_chemical_formula(formula: str) -> Mapping[str, int]:
@@ -44,8 +47,9 @@ def xrf_model(
     detector_thickness: Quantity,
     energy_min=1.5,
     energy_max=None,
-    use_bgr=True,
     elements: Mapping[str, int | float] = {},
+    fit_elastic_peak: bool = True,
+    add_Ar: bool = True,
 ) -> XRFModel:
     """create an XRF model
 
@@ -66,9 +70,11 @@ def xrf_model(
     # Add sample elements plus Ar since it's in a lot of detectors
     for element, amplitude in elements.items():
         model.add_element(element, amplitude=amplitude)
-    model.add_element("Ar")
+    if add_Ar:
+        model.add_element("Ar")
     # Add an elastic peak
-    model.add_scatter_peak()
+    if fit_elastic_peak:
+        model.add_scatter_peak()
     return model
 
 
@@ -98,9 +104,13 @@ async def _fit_spectrum(
     acquisition_time: float,
     deadtime_factor: float,
     model: XRFModel,
-):
+    add_background: bool = True,
+) -> FitResult:
     """Read and fit an individual spectrum from the array of spectra."""
-    log = get_run_logger()
+    try:
+        log = get_run_logger()
+    except MissingContextError:
+        log = logging.getLogger(__name__)
     t0 = time.perf_counter()
     # Larch expects data packaged into `Group` objects
     mca = Group()
@@ -111,11 +121,12 @@ async def _fit_spectrum(
     energy_stop = ev_per_bin * (num_bins + 0.5)
     mca.energy = np.linspace(energy_start, energy_stop, num=num_bins)
     # Execute the fit, use peakutils until we can get larch background working
-    # bg = xrf_background(energy=mca.energy/1000, counts=mca.counts)
-    # bg = peakutils.baseline(mca.counts, deg=4)
-    baseline = Baseline(x_data=mca.energy)
-    bg, bg_params = baseline.imodpoly(counts)
-    model.add_background(bg)
+    if add_background:
+        # bg = xrf_background(energy=mca.energy/1000, counts=mca.counts)
+        # bg = peakutils.baseline(mca.counts, deg=4)
+        baseline = Baseline(x_data=mca.energy)
+        bg, bg_params = baseline.imodpoly(counts)
+        model.add_background(bg)
     loop = asyncio.get_running_loop()
     output = await loop.run_in_executor(None, model.fit_spectrum, mca)
     decomp = output.decompose_spectrum(counts)
@@ -124,6 +135,7 @@ async def _fit_spectrum(
         weights=decomp.weights,
         predicted=decomp.total,
         model=model,
+        larch_output=output
     )
     log.debug(f"Fit spectrum in {time.perf_counter()-t0:.2f} seconds")
     return result
