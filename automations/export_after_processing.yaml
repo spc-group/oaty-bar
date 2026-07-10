@@ -1,0 +1,52 @@
+- name: Export after processing
+  description: After a run is processed, export files for users to take home.
+  enabled: true
+  tags: []
+  trigger:
+    type: event
+    match:
+      prefect.resource.id: prefect.flow-run.*
+    match_related:
+      prefect.resource.id:
+      - prefect.flow.e7d23544-3627-4208-af2d-a1587eff27cd
+      prefect.resource.role: flow
+    after: []
+    expect:
+    - prefect.flow-run.Failed
+    - prefect.flow-run.Cached
+    - prefect.flow-run.Completed
+    - prefect.flow-run.Crashed
+    - prefect.flow-run.TimedOut
+    for_each:
+    - prefect.resource.id
+    posture: Reactive
+    threshold: 1
+    within: 0.0
+  actions:
+  - type: run-deployment
+    source: selected
+    deployment_id: 54221030-8b9c-478d-91d4-1389cc47fac7
+    parameters:
+      force: false
+      filters:
+        dm_exp: ""
+        beamline: ""
+        plan_name: ""
+        scan_name: ""
+        xray_edge: ""
+        exit_status: null
+        sample_name: ""
+        sample_formula: ""
+        after: null
+        before: null
+        run_uid: '{{ flow_run.parameters[''run_uid''] }}'
+      max_runs: 1
+      target_dir: null
+      raw_profile: "oaty-bar"
+      results_profile: "oaty-bar-results"
+    job_variables: {}
+    schedule_after: 0.0
+  actions_on_trigger: []
+  actions_on_resolve: []
+  owner_resource: null
+  id: a40198da-3eb3-4014-9d3b-9b35643e2966

@@ -246,7 +246,7 @@ class CatalogFilters(BaseModel):
 async def export_runs(
     target_dir: Path | None = Field(
         default=None,
-        title="Tartget Export Folder",
+        title="Target Export Folder",
         description="An existing folder in which to export files. This path must be defined on the worker that will do the exporting, not your local file system.",
     ),
     *,
