@@ -234,7 +234,6 @@ async def test_missing_hints(xafs_run):
         name="primary",
         node=node,
         entry=mock.MagicMock(),
-        overwrite=False,
     )
 
 
@@ -294,7 +293,7 @@ async def test_idempotence(xafs_run, results_catalog, mocker):
 
     @flow()
     async def do():
-        await serialize_hdf(buff, xafs_run, results_runs=results_catalog, force=True)
+        await serialize_hdf(buff, xafs_run, results_runs=results_catalog)
 
     await do()
     await do()

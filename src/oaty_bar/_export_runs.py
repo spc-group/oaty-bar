@@ -154,7 +154,6 @@ def _export_run_coros(
             buff=hdf_file,
             run=run,
             results_runs=results_runs,
-            force=force,
             return_state=True,
         ),
     ]
