@@ -22,6 +22,9 @@ dev = ["black", "pytest", "ruff", "isort", "mypy"]
 [project.urls]
 Homepage = "https://github.com/spc-group/oaty-bar"
 
+[project.entry-points."xarray.backends"]
+xdi = "oaty_bar.xdi:XDIBackendEntrypoint"
+
 [project.scripts]
 dispatch-workflows = "oaty_bar._dispatch:main"
 export-runs = "oaty_bar._export_runs:main"

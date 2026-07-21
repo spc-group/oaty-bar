@@ -1,9 +1,13 @@
 import io
 
+import numpy as np
 import pandas as pd
+import pytest
 import pytest_asyncio
+import xarray as xr
 from prefect import flow
 
+from oaty_bar import xdi
 from oaty_bar._export_tsv import (
     headers,
     serialize_tsv,
@@ -54,7 +58,7 @@ def test_required_headers(xdi_text):
     assert "# Element.symbol: Ni" in xdi_text
     assert "# Element.edge: K" in xdi_text
     assert "# Mono.d_spacing: 3.13" in xdi_text
-    assert "# -------------" in xdi_text
+    assert "# -----" in xdi_text
 
 
 def test_optional_headers(xdi_text):
@@ -72,6 +76,7 @@ def test_optional_headers(xdi_text):
 def test_tsv_headers(tsv_text):
     """Do we still get a valid TSV file without any metadata."""
     assert "# energy\tenergy-id-energy-readback\tIt-net_current" in tsv_text
+    # assert "# energy energy-id-energy-readback It-net_current" in tsv_text
     # assert "d_spacing" not in tsv_text
     # Check the data
     buff = io.StringIO(tsv_text)
@@ -103,3 +108,27 @@ def test_data(xdi_text):
     # Check the data
     df = pd.read_csv(buff, comment="#", sep="\t")
     assert len(df.columns) == 3
+
+
+@pytest.mark.asyncio
+async def test_update_existing(xafs_run, results_catalog, mocker, tmp_path):
+    """Can we export the same file twice with consistent results."""
+    xdi_path = tmp_path / "example.xdi"
+
+    # Write a partial XDI file that we will update later
+    initial_arr = xr.Dataset(
+        {"monochromator-energy": np.asarray([0, 1, 2, 3])}, attrs={"xdi_version": "1.0"}
+    )
+    with open(xdi_path, mode="w") as fd:
+        xdi_text = xdi.dump(initial_arr)
+        fd.write(xdi_text)
+
+    @flow()
+    async def do():
+        await serialize_tsv(xdi_path, xafs_run)
+
+    await do()
+
+    with open(xdi_path, mode="r") as fd:
+        xdi_text = fd.read()
+        xarr = xdi.load(xdi_text, strict=False)

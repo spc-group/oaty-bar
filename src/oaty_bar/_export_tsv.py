@@ -1,6 +1,6 @@
 import asyncio
 import datetime as dt
-import io
+import json
 import logging
 import re
 from collections.abc import Mapping
@@ -13,6 +13,8 @@ from prefect.artifacts import create_link_artifact
 from prefect.concurrency.asyncio import rate_limit
 from tiled.client.container import Container
 from tiled.utils import SerializationError
+
+from . import xdi
 
 __all__ = ["serialize_tsv"]
 
@@ -115,19 +117,57 @@ def build_xdi(
 
     """
     data_keys_ = data_keys(stream_metadata)
-    # Write headers
-    xdi_text = ""
-    hdrs = headers(metadata, data_keys=data_keys_, strict=strict)
-    xdi_text += "\n".join(hdrs) + "\n"
-    # Write data
-    cols = "\t".join(data_keys_.keys())
-    xdi_text += f"# {cols}\n"
-    buffer = io.StringIO()
-    # Convert it from an xarray into a pandas data frame for easy serialization
-    df = data.to_dataframe()
-    df.to_csv(buffer, sep="\t", header=False, index=False, columns=data_keys_.keys())
-    buffer.seek(0)
-    xdi_text += buffer.read()
+    start_doc = metadata.get("start", {})
+    headers = {}
+    for num, (key, info) in enumerate(data_keys_.items()):
+        headers[f"Column.{num+1}"] = f"{key} {info.get('units', '')}"
+    # X-ray edge and d-spacing is required for proper XDI files
+    if strict and "edge" not in start_doc:
+        raise SerializationError(
+            "Metadata *edge* is required with strict XDI formatting."
+        )
+    edge_str = start_doc.get("edge", "") or ""  # Empty string in case it's `None`
+    match = re.match(r"([A-Z][a-z]?)[-_]([K-Z]\d*)", edge_str)
+    if match:
+        elem, edge = match.groups()
+        headers["Element.symbol"] = elem
+        headers["Element.edge"] = edge
+    elif strict:
+        raise SerializationError(
+            f"Metadata *edge* '{start_doc.get('edge')}' not in expected format."
+        )
+    d_spacing = start_doc.get("d_spacing")
+    d_spacing = None if d_spacing == "None" else d_spacing
+    if d_spacing is None and strict:
+        raise SerializationError(
+            "Argument *d_spacing* cannot be none with strict XDI formatting."
+        )
+    elif d_spacing is not None:
+        headers["Mono.d_spacing"] = d_spacing
+    # Other header metadata
+    if "plan_args" in start_doc:
+        headers["plan_args"] = json.dumps(start_doc["plan_args"])
+    if "time" in start_doc or strict:
+        start_time = dt.datetime.fromtimestamp(start_doc["time"], dt.timezone.utc)
+        start_time = start_time.astimezone()
+        headers["Scan.start_time"] = start_time.strftime("%Y-%m-%d %H:%M:%S%z")
+    md_mappings = [
+        # metadata key, XDI key
+        ("facility_id", "Facility.name"),
+        ("beamline_id", "Beamline.name"),
+        ("uid", "uid"),
+    ]
+    md_mappings = [key for key in md_mappings if key[0] in start_doc]
+    for md_key, xdi_key in md_mappings:
+        headers[xdi_key] = start_doc[md_key]
+    attrs: xdi.Attrs = {
+        "xdi_version": "1.0" if strict else "",
+        "header": headers,
+        "user_comment": start_doc.get("notes", ""),
+        "versions": start_doc.get("versions", {}),
+    }
+    xarr = xr.Dataset(data_vars=data.data_vars, coords=data.coords, attrs=attrs)
+    xdi_text = xdi.dump(xarr, strict=strict)
     return xdi_text
 
 
@@ -157,6 +197,26 @@ async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = Fa
     hinted_keys = data_keys(stream_node.metadata)
     await rate_limit("tiled-api")
     data = await asyncio.to_thread(stream_node.read, hinted_keys.keys())
+    # We need to pick a single coordinate to produce well-structured dataframes
+    dims_ = run.metadata.get("start", {}).get("hints", {}).get("dimensions", [])
+    dimensions = [dim for dims, stream in dims_ if stream == "primary" for dim in dims]
+    possible_coords = [
+        "monochromator-energy",
+        "mono-energy",
+        "energy",
+        *dimensions,
+        "seq_num",
+    ]
+    possible_coords = [name for name in possible_coords if name in data.data_vars]
+    coords = {}
+    data_vars = data.data_vars
+    if len(possible_coords) > 0:
+        name, *_ = possible_coords
+        coords[name] = (name, data_vars[name].data)
+        data_vars = {
+            key: (name, val.data) for key, val in data_vars.items() if key != name
+        }
+    data = xr.Dataset(coords=coords, data_vars=data_vars, attrs=data.attrs)
     xdi_text = build_xdi(
         metadata=run.metadata,
         stream_metadata=stream_node.metadata,
