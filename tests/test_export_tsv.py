@@ -116,8 +116,9 @@ async def test_update_existing(xafs_run, results_catalog, mocker, tmp_path):
     xdi_path = tmp_path / "example.xdi"
 
     # Write a partial XDI file that we will update later
+    n_events = xafs_run["primary/energy"].shape[0]
     initial_arr = xr.Dataset(
-        {"monochromator-energy": np.asarray([0, 1, 2, 3])}, attrs={"xdi_version": "1.0"}
+        {"monochromator-energy": np.arange(100)}, attrs={"xdi_version": "1.0"}
     )
     with open(xdi_path, mode="w") as fd:
         xdi_text = xdi.dump(initial_arr)
@@ -132,3 +133,4 @@ async def test_update_existing(xafs_run, results_catalog, mocker, tmp_path):
     with open(xdi_path, mode="r") as fd:
         xdi_text = fd.read()
         xarr = xdi.load(xdi_text, strict=False)
+    assert set(xarr.keys()) == {"energy", "energy-id-energy-readback", "It-net_current"}

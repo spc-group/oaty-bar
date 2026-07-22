@@ -104,6 +104,7 @@ def build_xdi(
     metadata: dict[str, Any],
     stream_metadata: dict[str, Any],
     data: xr.Dataset,
+    old_data: xr.Dataset,
     *,
     strict: bool,
 ) -> str:
@@ -111,6 +112,15 @@ def build_xdi(
 
     Parameters
     ==========
+    metadata
+      Run-level metadata as received from Tiled.
+    stream_metadata
+      Stream-level metadata as received from Tiled.
+    data
+      The dataset loaded from Tiled with the data to save.
+    old_data
+      A dataset with any data loaded from an existing TSV/XDI
+      file. These data will be merged with the new data.
     strict
       If true, raise an exception if required metadata keys are not
       found. Otherwise, missing keys are omitted from the header.
@@ -118,7 +128,7 @@ def build_xdi(
     """
     data_keys_ = data_keys(stream_metadata)
     start_doc = metadata.get("start", {})
-    headers = {}
+    headers = {**old_data.attrs.get("header", {})}
     for num, (key, info) in enumerate(data_keys_.items()):
         headers[f"Column.{num+1}"] = f"{key} {info.get('units', '')}"
     # X-ray edge and d-spacing is required for proper XDI files
@@ -163,10 +173,33 @@ def build_xdi(
     attrs: xdi.Attrs = {
         "xdi_version": "1.0" if strict else "",
         "header": headers,
-        "user_comment": start_doc.get("notes", ""),
-        "versions": start_doc.get("versions", {}),
+        "user_comment": start_doc.get("notes", old_data.attrs.get("user_comment", "")),
+        "versions": start_doc.get("versions", {**old_data.attrs.get("versions", {})}),
     }
-    xarr = xr.Dataset(data_vars=data.data_vars, coords=data.coords, attrs=attrs)
+    # We need to pick a single coordinate to produce well-structured dataframes
+    dims_ = start_doc.get("hints", {}).get("dimensions", [])
+    dimensions = [dim for dims, stream in dims_ if stream == "primary" for dim in dims]
+    possible_coords = [
+        "monochromator-energy",
+        "mono-energy",
+        "energy",
+        *dimensions,
+        "seq_num",
+    ]
+    data_vars = {**old_data.data_vars, **old_data.coords, **data.data_vars}
+    possible_coords = [name for name in possible_coords if name in data_vars]
+    coords = {}
+    if len(possible_coords) > 0:
+        name, *_ = possible_coords
+        coords[name] = (name, data_vars[name].data)
+        data_vars = {
+            key: (name, val.data) for key, val in data_vars.items() if key != name
+        }
+    print(data_vars)
+    # Build a combined dataset from the old and new data
+    # data = xr.Dataset(coords=coords, data_vars=data_vars, attrs=attrs)
+    # **old_data.data_vars, **old_data.coords, **data.data_vars}
+    xarr = xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
     xdi_text = xdi.dump(xarr, strict=strict)
     return xdi_text
 
@@ -188,6 +221,7 @@ async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = Fa
     start document *plan_name* is `"xafs_scan"`.
 
     """
+    filepath = Path(filepath)
     streams = run
     if "streams" in run.keys():
         # Older versions of Tiled have an additional "streams" node here
@@ -197,30 +231,18 @@ async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = Fa
     hinted_keys = data_keys(stream_node.metadata)
     await rate_limit("tiled-api")
     data = await asyncio.to_thread(stream_node.read, hinted_keys.keys())
-    # We need to pick a single coordinate to produce well-structured dataframes
-    dims_ = run.metadata.get("start", {}).get("hints", {}).get("dimensions", [])
-    dimensions = [dim for dims, stream in dims_ if stream == "primary" for dim in dims]
-    possible_coords = [
-        "monochromator-energy",
-        "mono-energy",
-        "energy",
-        *dimensions,
-        "seq_num",
-    ]
-    possible_coords = [name for name in possible_coords if name in data.data_vars]
-    coords = {}
-    data_vars = data.data_vars
-    if len(possible_coords) > 0:
-        name, *_ = possible_coords
-        coords[name] = (name, data_vars[name].data)
-        data_vars = {
-            key: (name, val.data) for key, val in data_vars.items() if key != name
-        }
-    data = xr.Dataset(coords=coords, data_vars=data_vars, attrs=data.attrs)
+    # Load existing data from file so we can merge them
+    if filepath.exists():
+        with open(filepath, mode="r") as fd:
+            old_data = xdi.load(fd.read(), strict=use_xdi)
+    else:
+        old_data = xr.Dataset()
+    # Write the new dataset to the XDI file
     xdi_text = build_xdi(
         metadata=run.metadata,
         stream_metadata=stream_node.metadata,
         data=data,
+        old_data=old_data,
         strict=use_xdi,
     )
     with open(filepath, mode="w") as fd:
