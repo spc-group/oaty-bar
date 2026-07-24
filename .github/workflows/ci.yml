@@ -18,13 +18,13 @@ jobs:
     strategy:
       max-parallel: 5
     steps:
-    - uses: actions/checkout@v4
-    - uses: prefix-dev/setup-pixi@v0.9.5
+    - uses: actions/checkout@v7
+    - uses: prefix-dev/setup-pixi@v0.10.0
       env:
         RUNNER_DEBUG: true
       with:
         log-level: vvv
-        pixi-version: v0.67.2
+        pixi-version: v0.73.0
         frozen: true
         cache: true
     - run: |
@@ -41,10 +41,10 @@ jobs:
     strategy:
       max-parallel: 5
     steps:
-    - uses: actions/checkout@v4
-    - uses: prefix-dev/setup-pixi@v0.9.4
+    - uses: actions/checkout@v7
+    - uses: prefix-dev/setup-pixi@v0.10.0
       with:
-        pixi-version: v0.67.2
+        pixi-version: v0.73.0
         cache: true
     - run: |
         pixi run check-types
@@ -58,10 +58,10 @@ jobs:
     strategy:
       max-parallel: 5
     steps:
-    - uses: actions/checkout@v4
-    - uses: prefix-dev/setup-pixi@v0.9.4
+    - uses: actions/checkout@v7
+    - uses: prefix-dev/setup-pixi@v0.10.0
       with:
-        pixi-version: v0.67.2
+        pixi-version: v0.73.0
         cache: true
     - name: Tests
       run: |
@@ -76,10 +76,10 @@ jobs:
   #   strategy:
   #     max-parallel: 5
   #   steps:
-  #   - uses: actions/checkout@v4
-  #   - uses: prefix-dev/setup-pixi@v0.9.0
+  #   - uses: actions/checkout@v7
+  #   - uses: prefix-dev/setup-pixi@v0.10.0
   #     with:
-  #       pixi-version: v0.53.0
+  #       pixi-version: v0.73.0
   #       cache: true
   #   - run: |
   #       pixi run make-docs
