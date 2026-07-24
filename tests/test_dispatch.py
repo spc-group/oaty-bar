@@ -1,18 +1,17 @@
 import asyncio
-import datetime as dt
 import json
 import urllib
 
 import pytest
 import pytest_asyncio
-from dmax.data_storage import Experiment
-from prefect import events
-from prefect.events.schemas.deployment_triggers import DeploymentEventTrigger
+from prefect.testing.fixtures import asserting_events_worker
 from websockets.asyncio.client import connect
 from websockets.asyncio.server import serve
 
-from oaty_bar._dispatch import dispatch_new_runs
-from oaty_bar.workflows import Workflow
+from oaty_bar._dispatch import dispatch_new_runs, process_msg
+
+# Make sure isort doesn't remove the fixture from imports
+assert asserting_events_worker
 
 WS_HOST = "127.0.0.1"
 WS_PORT = 4832
@@ -47,26 +46,10 @@ async def websocket():
 
 
 @pytest.mark.asyncio
-async def test_handle_message(websocket, mocker):
-    client, server = websocket
-    api = mocker.AsyncMock()
-    api.username = "s255idzuser"
-    api.experiment.return_value = Experiment(
-        name="cabana-2026-C3",
-        id="12345",
-        primaryStorage={"name": "", "id": 0},
-        experimentStation={"name": "", "id": 0},
-        experimentType={"name": "", "id": 0},
-        createDate=dt.datetime.now(),
-        updateDate=dt.datetime.now(),
-        startDate=dt.datetime.now(),
-        endDate=dt.datetime.now(),
-        dataDirectory="/tmp",
-    )
-    (connection,) = server.connections
-    dispatched = asyncio.create_task(dispatch_new_runs(websocket=client))
-    # First check that we don't do anything unless there's a stop document
-    await connection.send(
+async def test_ignores_new_run():
+    """No events should be emitted without a stop document."""
+    # Check that we don't do anything unless there's a stop document
+    events = process_msg(
         json.dumps(
             {
                 "type": "container-child-metadata-updated",
@@ -74,172 +57,63 @@ async def test_handle_message(websocket, mocker):
                 "specs": [],
                 "metadata": {"start": {}},
             }
-        )
-    )
-
-    await asyncio.sleep(0.01)
-    assert not api.send.called
-    # Now check that we start a new workflow of some sort
-    await connection.send(
-        json.dumps(
-            {
-                "type": "container-child-metadata-updated",
-                "key": "ABC123",
-                "specs": [],
-                "metadata": {
-                    "start": {
-                        "uid": "54321",
-                        "dm_exp": "cabana-2026-C3",
-                        "dm_station_name": "255IDZ",
-                    },
-                    "stop": {"exit_status": "success"},
-                },
-            }
-        )
-    )
-    await asyncio.sleep(0.01)
-    assert not api.submit_processing_job.assert_called_once_with(
-        workflow="simple", run_uid="54321", target_folder="/tmp", filePath="/dev/null"
-    )
-
-
-@pytest.mark.asyncio
-async def test_emits_event(websocket, mocker, prefect_server):
-    client, server = websocket
-    api = mocker.AsyncMock()
-    api.username = "s255idzuser"
-    api.experiment.return_value = Experiment(
-        name="cabana-2026-C3",
-        id="12345",
-        primaryStorage={"name": "", "id": 0},
-        experimentStation={"name": "", "id": 0},
-        experimentType={"name": "", "id": 0},
-        createDate=dt.datetime.now(),
-        updateDate=dt.datetime.now(),
-        startDate=dt.datetime.now(),
-        endDate=dt.datetime.now(),
-        dataDirectory="/tmp",
-    )
-    (connection,) = server.connections
-    dispatched = asyncio.create_task(dispatch_new_runs(websocket=client))
-    # First check that we don't do anything unless there's a stop document
-    events_client = events.clients.PrefectServerEventsClient()
-    await connection.send(
-        json.dumps(
-            {
-                "type": "container-child-metadata-updated",
-                "key": "ABC123",
-                "specs": [],
-                "metadata": {"start": {}},
-            }
-        )
-    )
-
-    await asyncio.sleep(0.01)
-    assert not api.send.called
-    # Handler to listen for new events
-    trigger = DeploymentEventTrigger(
-        expect={"bluesky.run.success"},
-    )
-    print(dir(events_client))
-    print(events.clients)
-    print(dir(events))
-    assert False
-    # Now check that we emit the correct event when created
-    await connection.send(
-        json.dumps(
-            {
-                "type": "container-child-metadata-updated",
-                "key": "ABC123",
-                "specs": [],
-                "metadata": {
-                    "start": {
-                        "uid": "54321",
-                        "dm_exp": "cabana-2026-C3",
-                        "dm_station_name": "255IDZ",
-                    },
-                    "stop": {"exit_status": "success"},
-                },
-            }
-        )
-    )
-
-
-@pytest.mark.asyncio
-async def test_add_workflow(websocket, mocker):
-    """Adds a new workflow if the requested workflow doesn't exist."""
-    client, server = websocket
-    api = mocker.AsyncMock()
-    api.username = "s255idzuser"
-    api.experiment.return_value = Experiment(
-        name="cabana-2026-C3",
-        id="12345",
-        primaryStorage={"name": "", "id": 0},
-        experimentStation={"name": "", "id": 0},
-        experimentType={"name": "", "id": 0},
-        createDate=dt.datetime.now(),
-        updateDate=dt.datetime.now(),
-        startDate=dt.datetime.now(),
-        endDate=dt.datetime.now(),
-        dataDirectory="/tmp",
-    )
-    api.workflows.return_value = []
-    (connection,) = server.connections
-    dispatched = asyncio.create_task(dispatch_new_runs(websocket=client))
-    # Now check that we start a new workflow of some sort
-    await connection.send(
-        json.dumps(
-            {
-                "type": "container-child-metadata-updated",
-                "key": "ABC123",
-                "specs": [],
-                "metadata": {
-                    "start": {
-                        "uid": "54321",
-                        "dm_exp": "cabana-2026-C3",
-                        "dm_station_name": "255IDZ",
-                    },
-                    "stop": {"exit_status": "success"},
-                },
-            }
-        )
-    )
-    await asyncio.sleep(0.01)
-    api.add_workflow.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_update_workflow(websocket, mocker):
-    """Updates an existing workflow if the version number is higher."""
-    client, server = websocket
-    api = mocker.AsyncMock()
-    api.username = "s255idzuser"
-    api.experiment.return_value = Experiment(
-        name="cabana-2026-C3",
-        id="12345",
-        primaryStorage={"name": "", "id": 0},
-        experimentStation={"name": "", "id": 0},
-        experimentType={"name": "", "id": 0},
-        createDate=dt.datetime.now(),
-        updateDate=dt.datetime.now(),
-        startDate=dt.datetime.now(),
-        endDate=dt.datetime.now(),
-        dataDirectory="/tmp",
-    )
-    api.workflows.return_value = [
-        Workflow(
-            name="simple",
-            version=0,
-            owner="s255idzuser",
-            userAccount="s255idzuser",
-            description="",
-            id="12345",
-            stages={},
         ),
-    ]
+        instance_uuid="123456",
+    )
+    assert len(list(events)) == 0
+
+
+@pytest.mark.asyncio
+async def test_emits_resource():
+    events = process_msg(
+        json.dumps(
+            {
+                "type": "container-child-metadata-updated",
+                "key": "ABC123",
+                "specs": [],
+                "metadata": {
+                    "start": {
+                        "uid": "54321",
+                        "dm_exp": "cabana-2026-C3",
+                        "dm_station_name": "255IDZ",
+                        "beamline_id": "255-ID-Z",
+                    },
+                    "stop": {"exit_status": "success"},
+                },
+            }
+        ),
+        instance_uuid="123456",
+    )
+    start_event, success_event = events
+    assert start_event.resource == {
+        "prefect.resource.id": "oaty-bar.dispatcher.123456",
+        "bluesky.run.uid": "54321",
+        "aps.beamline.id": "255-ID-Z",
+    }
+    assert start_event.payload == {
+        "type": "container-child-metadata-updated",
+        "key": "ABC123",
+        "specs": [],
+        "metadata": {
+            "start": {
+                "uid": "54321",
+                "dm_exp": "cabana-2026-C3",
+                "dm_station_name": "255IDZ",
+                "beamline_id": "255-ID-Z",
+            },
+            "stop": {"exit_status": "success"},
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_dispatch_emits_events(
+    websocket, mocker, prefect_server, asserting_events_worker
+):
+    client, server = websocket
     (connection,) = server.connections
     dispatched = asyncio.create_task(dispatch_new_runs(websocket=client))
-    # Now check that we start a new workflow of some sort
+    # Check that we emit the correct event when created
     await connection.send(
         json.dumps(
             {
@@ -258,5 +132,7 @@ async def test_update_workflow(websocket, mocker):
         )
     )
     await asyncio.sleep(0.01)
-    assert not api.add_workflow.called
-    api.set_workflow.assert_called_once()
+    asserting_events_worker.drain()
+    events = asserting_events_worker._client.events
+    event_names = {ev.event for ev in asserting_events_worker._client.events}
+    assert event_names == {"bluesky.run.stopped", "bluesky.run.success"}

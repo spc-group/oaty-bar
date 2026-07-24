@@ -1,10 +1,12 @@
 import argparse
 import asyncio
+import dataclasses
 import json
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 from pathlib import Path
+from typing import Any
 
 from prefect.events import emit_event
 from tiled.client import from_profile
@@ -14,7 +16,14 @@ from websockets.asyncio.client import ClientConnection, connect
 log = logging.getLogger("oaty-bar")
 
 
-async def process_msg(msg: str, instance_uuid: str):
+@dataclasses.dataclass()
+class EventData:
+    event: str
+    resource: dict[str, str]
+    payload: dict[str, Any] | None = None
+
+
+def process_msg(msg: str, instance_uuid: str) -> Generator[EventData, Any, None]:
     """Process an individual websocket message."""
     payload = json.loads(msg)
     if payload["type"] != "container-child-metadata-updated":
@@ -34,9 +43,13 @@ async def process_msg(msg: str, instance_uuid: str):
         "aps.beamline.id": metadata.get("start", {}).get("beamline_id", ""),
     }
     log.info(f"Emitting events for resource: {resource}")
-    emit_event("bluesky.run.stopped", resource=resource, payload=payload)
+    yield EventData("bluesky.run.stopped", resource=resource, payload=payload)
+    # emit_event("bluesky.run.stopped", resource=resource, payload=payload)
     if exit_status := metadata.get("stop", {}).get("exit_status"):
-        emit_event(f"bluesky.run.{exit_status}", resource=resource, payload=payload)
+        # emit_event(f"bluesky.run.{exit_status}", resource=resource, payload=payload)
+        yield EventData(
+            f"bluesky.run.{exit_status}", resource=resource, payload=payload
+        )
 
 
 async def dispatch_new_runs(
@@ -46,7 +59,9 @@ async def dispatch_new_runs(
     async for msg in websocket:
         log.info(f"Received message {msg}")
         try:
-            await process_msg(msg=msg, instance_uuid=str(instance_uuid))
+            events = process_msg(msg=msg, instance_uuid=str(instance_uuid))
+            for event in events:
+                emit_event(**dataclasses.asdict(event))
         except Exception as exc:
             log.exception(exc)
             continue
