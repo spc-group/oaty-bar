@@ -224,8 +224,8 @@ class CatalogFilters(BaseModel):
         title="Data-management experiment name",
         description="Only include runs with this data management experiment name.",
     )
-    beamline: str = Field(
-        default="",
+    beamline: Literal["All", "25-ID-C", "25-ID-D"] = Field(
+        default="All",
         title="Beamline",
         description="Only include runs from this beamline.",
     )
@@ -301,7 +301,7 @@ async def export_runs(
         scan_name=filters.scan_name or None,
         edge=filters.xray_edge or None,
         dm_exp=filters.dm_exp or None,
-        beamline=filters.beamline or None,
+        beamline=None if filters.beamline == "All" else filters.beamline,
         uid=filters.run_uid or None,
     )
     catalog = from_profile(raw_profile)
@@ -494,7 +494,7 @@ def main(argv: Sequence[str] | None = None):
         scan_name=args.scan or "",
         xray_edge=args.edge or "",
         dm_exp=args.dm_exp or "",
-        beamline=args.beamline or "",
+        beamline=args.beamline or "All",
         before=args.before,
         after=args.after,
     )
