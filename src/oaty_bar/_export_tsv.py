@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import xarray as xr
 from prefect import task
 from prefect.artifacts import create_link_artifact
@@ -195,7 +196,6 @@ def build_xdi(
         data_vars = {
             key: (name, val.data) for key, val in data_vars.items() if key != name
         }
-    print(data_vars)
     # Build a combined dataset from the old and new data
     # data = xr.Dataset(coords=coords, data_vars=data_vars, attrs=attrs)
     # **old_data.data_vars, **old_data.coords, **data.data_vars}
@@ -204,13 +204,31 @@ def build_xdi(
     return xdi_text
 
 
+async def load_dataset(node: Container) -> xr.Dataset:
+    """Load hinted signals for a given the given Tiled node."""
+    hinted_keys = data_keys(node.metadata)
+    await rate_limit("tiled-api")
+    print(list(hinted_keys.keys()))
+    data = await asyncio.to_thread(node.read, list(hinted_keys.keys()))
+    # data = await asyncio.to_thread(node.read)
+    if isinstance(data, pd.DataFrame):
+        data = data.to_xarray()
+    print(data)
+    return data
+
+
 @task(
     tags=["export"],
     retries=3,
     retry_delay_seconds=10,
     retry_jitter_factor=3,
 )
-async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = False):
+async def serialize_tsv(
+    filepath: str | Path,
+    run: Container,
+    results_runs: Container | None = None,
+    use_xdi: bool = False,
+):
     """Write a bluesky run as tab-separated values.
 
     Assumes that *node* is a BlueskyRun.
@@ -227,10 +245,23 @@ async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = Fa
         # Older versions of Tiled have an additional "streams" node here
         streams = run["streams"]
     stream_node = streams["primary"]
-    # Get extra data
-    hinted_keys = data_keys(stream_node.metadata)
-    await rate_limit("tiled-api")
-    data = await asyncio.to_thread(stream_node.read, hinted_keys.keys())
+    data = await load_dataset(stream_node)
+    # Get extra data (results, etc)
+    if results_runs is not None:
+        await rate_limit("tiled-api")
+        _result_runs = await asyncio.to_thread(list, results_runs.values())
+        result_streams = [
+            node
+            for run in _result_runs
+            for node in await asyncio.to_thread(list, run.values())
+        ]
+    else:
+        result_streams = []
+    other_datasets = await asyncio.gather(
+        *[load_dataset(node) for node in result_streams]
+    )
+    for other in other_datasets:
+        data = data.merge(other)
     # Load existing data from file so we can merge them
     if filepath.exists():
         with open(filepath, mode="r") as fd:
@@ -238,6 +269,9 @@ async def serialize_tsv(filepath: str | Path, run: Container, use_xdi: bool = Fa
     else:
         old_data = xr.Dataset()
     # Write the new dataset to the XDI file
+    print("$$$$$")
+    print(data)
+    print("^^^^^")
     xdi_text = build_xdi(
         metadata=run.metadata,
         stream_metadata=stream_node.metadata,

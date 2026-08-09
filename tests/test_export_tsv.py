@@ -51,6 +51,31 @@ async def tsv_text(xafs_run, tmp_path):
         yield fd.read()
 
 
+@pytest.fixture()
+def results_catalog(results_catalog):
+    run = results_catalog.create_container(
+        "blahblah", metadata={"run_uid": "7d1daf1d-60c7-4aa7-a668-d1cd97e5335f"}
+    )
+    print(help(run.write_table))
+    stream = run.write_table(
+        pd.DataFrame({"Ni": np.arange(100)}),
+        key="ge_8element_fit",
+        metadata={
+            "data_keys": {
+                "Ni": {
+                    "dtype": "number",
+                    "dtype_numpy": "<i4",
+                    "shape": [],
+                },
+            },
+            "hints": {
+                "ge_8element": {"fields": ["Ni"]},
+            },
+        },
+    )
+    return results_catalog
+
+
 def test_required_headers(xdi_text):
     assert "# XDI/1.0 bluesky/1.9.0 ophyd/1.7.0" in xdi_text
     assert "# Column.1: energy eV" in xdi_text
@@ -82,6 +107,27 @@ def test_tsv_headers(tsv_text):
     buff = io.StringIO(tsv_text)
     df = pd.read_csv(buff, comment="#", sep="\t")
     assert len(df.columns) == 3
+
+
+@pytest.mark.asyncio
+async def test_export_results(xafs_run, results_catalog, tmp_path):
+    xdi_path = tmp_path / "example.xdi"
+
+    @flow()
+    async def do():
+        await serialize_tsv(xdi_path, xafs_run, results_runs=results_catalog)
+
+    await do()
+
+    with open(xdi_path, mode="r") as fd:
+        xdi_text = fd.read()
+        xarr = xdi.load(xdi_text, strict=False)
+    assert set(xarr.coords.keys()) == {"energy"}
+    assert set(xarr.keys()) == {
+        "energy-id-energy-readback",
+        "It-net_current",
+        "Ni",
+    }
 
 
 def test_missing_edge(tsv_text):
@@ -134,3 +180,4 @@ async def test_update_existing(xafs_run, results_catalog, mocker, tmp_path):
         xdi_text = fd.read()
         xarr = xdi.load(xdi_text, strict=False)
     assert set(xarr.keys()) == {"energy", "energy-id-energy-readback", "It-net_current"}
+    assert set(xarr.coords.keys()) == {"monochromator-energy"}
