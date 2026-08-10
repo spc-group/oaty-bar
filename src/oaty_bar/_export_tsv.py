@@ -208,12 +208,10 @@ async def load_dataset(node: Container) -> xr.Dataset:
     """Load hinted signals for a given the given Tiled node."""
     hinted_keys = data_keys(node.metadata)
     await rate_limit("tiled-api")
-    print(list(hinted_keys.keys()))
     data = await asyncio.to_thread(node.read, list(hinted_keys.keys()))
     # data = await asyncio.to_thread(node.read)
     if isinstance(data, pd.DataFrame):
         data = data.to_xarray()
-    print(data)
     return data
 
 
@@ -269,9 +267,6 @@ async def serialize_tsv(
     else:
         old_data = xr.Dataset()
     # Write the new dataset to the XDI file
-    print("$$$$$")
-    print(data)
-    print("^^^^^")
     xdi_text = build_xdi(
         metadata=run.metadata,
         stream_metadata=stream_node.metadata,
