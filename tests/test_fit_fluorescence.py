@@ -81,6 +81,20 @@ async def test_writes_result_container(
     assert "background" in result_table
     assert "pileup" in result_table
     assert "χ²" in result_table
+    table_metadata = result["ge_2element-fit"].metadata
+    assert table_metadata["hints"] == {
+        # For now, no results are hinted
+        "ge_2element": {"fields": []},
+    }
+    assert table_metadata["data_keys"] == {
+        "Ar": {"dtype": "number", "dtype_numpy": "<f8", "shape": []},
+        "Cr": {"dtype": "number", "dtype_numpy": "<f8", "shape": []},
+        "O": {"dtype": "number", "dtype_numpy": "<f8", "shape": []},
+        "background": {"dtype": "number", "dtype_numpy": "<f8", "shape": []},
+        "elastic": {"dtype": "number", "dtype_numpy": "<f8", "shape": []},
+        "pileup": {"dtype": "number", "dtype_numpy": "<f8", "shape": []},
+        "χ²": {"dtype": "number", "dtype_numpy": "<f8", "shape": []},
+    }
 
 
 @pytest.mark.asyncio

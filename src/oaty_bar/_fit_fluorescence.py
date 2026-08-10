@@ -284,10 +284,23 @@ async def fit_array(
     # Write these are a table
     df = pd.DataFrame(new_signals)
     table_name = f"{detector_name}-fit"
+    md = {
+        "data_keys": {
+            key: {"dtype": "number", "dtype_numpy": "<f8", "shape": []}
+            for key in df.columns
+        },
+        "hints": {detector_name: {"fields": []}},
+    }
     if table_name in await asyncio.to_thread(list, results_node.keys()):
-        await asyncio.to_thread(results_node[table_name].write, df)
+        table_client = results_node[table_name]
+        await asyncio.gather(
+            asyncio.to_thread(table_client.write, df),
+            asyncio.to_thread(table_client.update_metadata, md),
+        )
     else:
-        await asyncio.to_thread(results_node.write_table, df, key=table_name)
+        await asyncio.to_thread(
+            results_node.write_table, df, key=table_name, metadata=md
+        )
     return results
 
 
@@ -337,7 +350,7 @@ async def fit_run_fluorescence(run: Container, results_catalog: Container):
         )
         baseline_energy = None
     # Fit the whole array concurrently
-    results_run = _results_container(run, results_catalog)
+    results_run = None
     elements = parse_chemical_formula(run.metadata["start"].get("sample_formula", ""))
     if len(elements) == 0:
         log.warning(
@@ -367,6 +380,8 @@ async def fit_run_fluorescence(run: Container, results_catalog: Container):
                 else baseline_energies
             )
             # Let prefect know what assets we expect to produce
+            if results_run is None:
+                results_run = _results_container(run, results_catalog)
             expected_table_uri = f"{results_run.uri}/{source_node.path_parts[-1]}-fit"
             node_name = source_node.path_parts[-1]
             coro = materialize(
