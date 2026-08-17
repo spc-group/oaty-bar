@@ -1,0 +1,419 @@
+uid: bb348713-fb88-4971-9034-40dc3bf1fe02
+time: 1786495301.1899173
+hints:
+  counter:
+    fields: []
+  I0_preamp: {}
+data_keys:
+  I0-count:
+    dtype: array
+    shape:
+      - 1
+    units: ''
+    source: ca://25idcVME:3820:mca4.VAL
+    dtype_numpy: <i4
+    object_name: counter
+  counter-clock-count:
+    dtype: array
+    shape:
+      - 1
+    units: ''
+    source: ca://25idcVME:3820:mca1.VAL
+    dtype_numpy: <i4
+    object_name: counter
+configuration:
+  counter:
+    data:
+      I0-mode: PHA
+      counter-prescale: 1
+      counter-clock-mode: PHA
+      counter-dwell_time: 3
+      counter-input_mode: Mode 3
+      counter-preset_time: 0
+      counter-acquire_mode: MCS
+      counter-clock_source: External
+      counter-num_channels: 1
+      counter-scaler-delay: 0
+      counter-input_polarity: Normal
+      counter-action_on_start: 'Yes'
+      counter-num_channels_max: 8000
+      counter-scaler-count_mode: OneShot
+      counter-scaler-preset_time: 0
+      counter-channel_advance_source: Internal
+      counter-scaler-clock_frequency: 9600000
+      counter-dark_current_signals: ["I0", "It"]
+    data_keys:
+      I0-mode:
+        dtype: string
+        shape: []
+        source: ca://25idcVME:3820:mca4.MODE
+        choices:
+          - PHA
+          - MCS
+          - List
+        dtype_numpy: '|S40'
+      counter-prescale:
+        dtype: integer
+        shape: []
+        units: ''
+        source: ca://25idcVME:3820:Prescale
+        dtype_numpy: <i8
+      counter-clock-mode:
+        dtype: string
+        shape: []
+        source: ca://25idcVME:3820:mca1.MODE
+        choices:
+          - PHA
+          - MCS
+          - List
+        dtype_numpy: '|S40'
+      counter-dwell_time:
+        dtype: number
+        shape: []
+        units: ''
+        source: ca://25idcVME:3820:Dwell
+        precision: 3
+        dtype_numpy: <f8
+      counter-input_mode:
+        dtype: string
+        shape: []
+        source: ca://25idcVME:3820:InputMode
+        choices:
+          - Mode 0
+          - Mode 1
+          - Mode 2
+          - Mode 3
+          - Mode 4
+          - Mode 5
+          - Mode 6
+        dtype_numpy: '|S40'
+      counter-preset_time:
+        dtype: number
+        shape: []
+        units: ''
+        source: ca://25idcVME:3820:PresetReal
+        precision: 3
+        dtype_numpy: <f8
+      counter-acquire_mode:
+        dtype: string
+        shape: []
+        source: ca://25idcVME:3820:AcquireMode
+        choices:
+          - MCS
+          - Scaler
+        dtype_numpy: '|S40'
+      counter-clock_source:
+        dtype: string
+        shape: []
+        source: ca://25idcVME:3820:Channel1Source
+        choices:
+          - Int. clock
+          - External
+        dtype_numpy: '|S40'
+      counter-num_channels:
+        dtype: integer
+        shape: []
+        units: ''
+        source: ca://25idcVME:3820:NuseAll
+        dtype_numpy: <i8
+      counter-scaler-delay:
+        dtype: number
+        shape: []
+        units: ''
+        source: ca://25idcVME:3820:scaler1.DLY
+        precision: 3
+        dtype_numpy: <f8
+      counter-input_polarity:
+        dtype: string
+        shape: []
+        source: ca://25idcVME:3820:InputPolarity
+        choices:
+          - Normal
+          - Inverted
+        dtype_numpy: '|S40'
+      counter-action_on_start:
+        dtype: string
+        shape: []
+        source: ca://25idcVME:3820:CountOnStart
+        choices:
+          - 'No'
+          - 'Yes'
+        dtype_numpy: '|S40'
+      counter-num_channels_max:
+        dtype: integer
+        shape: []
+        units: ''
+        source: ca://25idcVME:3820:MaxChannels
+        dtype_numpy: <i8
+      counter-scaler-count_mode:
+        dtype: string
+        shape: []
+        source: ca://25idcVME:3820:scaler1.CONT
+        choices:
+          - OneShot
+          - AutoCount
+        dtype_numpy: '|S40'
+      counter-scaler-preset_time:
+        dtype: number
+        shape: []
+        units: ''
+        source: ca://25idcVME:3820:scaler1.TP
+        precision: 3
+        dtype_numpy: <f8
+      counter-channel_advance_source:
+        dtype: string
+        shape: []
+        source: ca://25idcVME:3820:ChannelAdvance
+        choices:
+          - Internal
+          - External
+        dtype_numpy: '|S40'
+      counter-scaler-clock_frequency:
+        dtype: number
+        shape: []
+        units: ''
+        source: ca://25idcVME:3820:scaler1.FREQ
+        precision: 3
+        dtype_numpy: <f8
+    timestamps:
+      I0-mode: 1786495301.122276
+      counter-prescale: 1786051579.477
+      counter-clock-mode: 1786495301.122276
+      counter-dwell_time: 1786135654.04359
+      counter-input_mode: 1786051579.477
+      counter-preset_time: 1786051579.477
+      counter-acquire_mode: 1786051579.576999
+      counter-clock_source: 1786051579.543666
+      counter-num_channels: 1786495298.105609
+      counter-scaler-delay: 1786051579.576999
+      counter-input_polarity: 1786051579.543666
+      counter-action_on_start: 1786051579.543666
+      counter-num_channels_max: 1786051579.477
+      counter-scaler-count_mode: 1786051579.576999
+      counter-scaler-preset_time: 1786051579.576999
+      counter-channel_advance_source: 1786495298.105609
+      counter-scaler-clock_frequency: 1786051579.576999
+  I0_preamp:
+    data:
+      I0_preamp-gain: 500000000000
+      I0_preamp-blank: false
+      I0_preamp-invert: false
+      I0_preamp-bias_on: false
+      I0_preamp-gain_db: 116.98970004336019
+      I0_preamp-gain_mode: LOW NOISE
+      I0_preamp-offset_on: true
+      I0_preamp-bias_value: 0
+      I0_preamp-gain_level: 26
+      I0_preamp-offset_cal: CAL
+      I0_preamp-filter_type: 12 dB lowpass
+      I0_preamp-offset_fine: 1000
+      I0_preamp-offset_sign: +
+      I0_preamp-offset_unit: pA
+      I0_preamp-offset_value: '1'
+      I0_preamp-filter_lowpass: 100   Hz
+      I0_preamp-filter_highpass: ' 30   Hz'
+      I0_preamp-sensitivity_unit: pA/V
+      I0_preamp-sensitivity_value: '2'
+    data_keys:
+      I0_preamp-gain:
+        dtype: number
+        shape: []
+        units: V A⁻
+        source: derived://I0_preamp-gain
+        dtype_numpy: <f8
+      I0_preamp-blank:
+        dtype: boolean
+        shape: []
+        source: ca://25idc:SR04:blank_on
+        dtype_numpy: '|b1'
+      I0_preamp-invert:
+        dtype: boolean
+        shape: []
+        source: ca://25idc:SR04:invert_on
+        dtype_numpy: '|b1'
+      I0_preamp-bias_on:
+        dtype: boolean
+        shape: []
+        source: ca://25idc:SR04:bias_on
+        dtype_numpy: '|b1'
+      I0_preamp-gain_db:
+        dtype: number
+        shape: []
+        units: dB
+        source: derived://I0_preamp-gain_db
+        dtype_numpy: <f8
+      I0_preamp-gain_mode:
+        dtype: string
+        shape: []
+        source: ca://25idc:SR04:gain_mode
+        choices:
+          - LOW NOISE
+          - HIGH BW
+          - LOW DRIFT
+        dtype_numpy: '|S40'
+      I0_preamp-offset_on:
+        dtype: boolean
+        shape: []
+        source: ca://25idc:SR04:offset_on
+        dtype_numpy: '|b1'
+      I0_preamp-bias_value:
+        dtype: integer
+        shape: []
+        units: ''
+        source: ca://25idc:SR04:bias_put
+        dtype_numpy: <i8
+      I0_preamp-gain_level:
+        dtype: integer
+        shape: []
+        source: derived://I0_preamp-gain_level
+        dtype_numpy: <i8
+      I0_preamp-offset_cal:
+        dtype: string
+        shape: []
+        source: ca://25idc:SR04:offset_cal
+        choices:
+          - CAL
+          - UNCAL
+        dtype_numpy: '|S40'
+      I0_preamp-filter_type:
+        dtype: string
+        shape: []
+        source: ca://25idc:SR04:filter_type
+        choices:
+          - '  No filter'
+          - ' 6 dB highpass'
+          - 12 dB highpass
+          - ' 6 dB bandpass'
+          - ' 6 dB lowpass'
+          - 12 dB lowpass
+        dtype_numpy: '|S40'
+      I0_preamp-offset_fine:
+        dtype: integer
+        shape: []
+        units: ''
+        source: ca://25idc:SR04:off_u_put
+        dtype_numpy: <i8
+      I0_preamp-offset_sign:
+        dtype: string
+        shape: []
+        source: ca://25idc:SR04:offset_sign
+        choices:
+          - +
+          - '-'
+        dtype_numpy: '|S40'
+      I0_preamp-offset_unit:
+        dtype: string
+        shape: []
+        source: ca://25idc:SR04:offset_unit
+        choices:
+          - pA
+          - nA
+          - uA
+          - mA
+        dtype_numpy: '|S40'
+      I0_preamp-offset_value:
+        dtype: string
+        shape: []
+        source: ca://25idc:SR04:offset_num
+        choices:
+          - '1'
+          - '2'
+          - '5'
+          - '10'
+          - '20'
+          - '50'
+          - '100'
+          - '200'
+          - '500'
+        dtype_numpy: '|S40'
+      I0_preamp-filter_lowpass:
+        dtype: string
+        shape: []
+        source: ca://25idc:SR04:low_freq
+        choices:
+          - '  0.03 Hz'
+          - '  0.1 Hz'
+          - '  0.3 Hz'
+          - '  1   Hz'
+          - '  3   Hz'
+          - ' 10   Hz'
+          - ' 30   Hz'
+          - 100   Hz
+          - 300   Hz
+          - '  1   kHz'
+          - '  3   kHz'
+          - ' 10   kHz'
+          - ' 30   kHz'
+          - 100   kHz
+          - 300   kHz
+          - '  1   MHz'
+        dtype_numpy: '|S40'
+      I0_preamp-filter_highpass:
+        dtype: string
+        shape: []
+        source: ca://25idc:SR04:high_freq
+        choices:
+          - '  0.03 Hz'
+          - '  0.1 Hz'
+          - '  0.3 Hz'
+          - '  1   Hz'
+          - '  3   Hz'
+          - ' 10   Hz'
+          - ' 30   Hz'
+          - 100   Hz
+          - 300   Hz
+          - '  1   kHz'
+          - '  3   kHz'
+          - ' 10   kHz'
+        dtype_numpy: '|S40'
+      I0_preamp-sensitivity_unit:
+        dtype: string
+        shape: []
+        source: ca://25idc:SR04:sens_unit
+        choices:
+          - pA/V
+          - nA/V
+          - uA/V
+          - mA/V
+        dtype_numpy: '|S40'
+      I0_preamp-sensitivity_value:
+        dtype: string
+        shape: []
+        source: ca://25idc:SR04:sens_num
+        choices:
+          - '1'
+          - '2'
+          - '5'
+          - '10'
+          - '20'
+          - '50'
+          - '100'
+          - '200'
+          - '500'
+        dtype_numpy: '|S40'
+      counter-dark_current_signals:
+        dtype: array
+        shape: [2]
+        dtype_numpy: '|S40'
+        source: 'soft://counter-dark_current_signals'
+    timestamps:
+      I0_preamp-gain: 631152000
+      I0_preamp-blank: 631152000
+      I0_preamp-invert: 631152000
+      I0_preamp-bias_on: 631152000
+      I0_preamp-gain_db: 631152000
+      I0_preamp-gain_mode: 631152000
+      I0_preamp-offset_on: 631152000
+      I0_preamp-bias_value: 631152000
+      I0_preamp-gain_level: 631152000
+      I0_preamp-offset_cal: 631152000
+      I0_preamp-filter_type: 631152000
+      I0_preamp-offset_fine: 1786051547.226911
+      I0_preamp-offset_sign: 631152000
+      I0_preamp-offset_unit: 631152000
+      I0_preamp-offset_value: 631152000
+      I0_preamp-filter_lowpass: 631152000
+      I0_preamp-filter_highpass: 631152000
+      I0_preamp-sensitivity_unit: 631152000
+      I0_preamp-sensitivity_value: 631152000
+      counter-dark_current_signals: 631152000

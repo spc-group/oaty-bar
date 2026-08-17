@@ -1,0 +1,61 @@
+configuration:
+  It-preamp:
+    data:
+      It-preamp-gain: 15
+    data_keys:
+      It-preamp-gain:
+        dtype: number
+        dtype_numpy: <f8
+        object_name: It-preamp
+        shape: []
+  I0-preamp:
+    data:
+      I0-preamp-gain: 33
+    data_keys:
+      I0-preamp-gain:
+        dtype: number
+        dtype_numpy: <f8
+        object_name: I0-preamp
+        shape: []        
+data_keys:
+  aps_current:
+    dtype: number
+    dtype_numpy: <f8
+    limits:
+      control:
+        high: 0.0
+        low: 0.0
+      display:
+        high: 0.0
+        low: 0.0
+    object_name: aps
+    precision: 3
+    shape: []
+    source: ca://...
+    units: mA
+  aps_fill_number:
+    dtype: number
+    dtype_numpy: <u4
+    limits:
+      control:
+        high: 0.0
+        low: 0.0
+      display:
+        high: 0.0
+        low: 0.0
+    object_name: aps
+    shape: []
+    source: ca://...
+  aps_global_feedback:
+    dtype: bool
+    dtype_numpy: '|u1'
+    limits:
+      control:
+        high: 0.0
+        low: 0.0
+      display:
+        high: 0.0
+        low: 0.0
+    object_name: aps
+    shape: []
+    source: ca://...

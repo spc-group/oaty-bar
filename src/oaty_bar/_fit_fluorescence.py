@@ -22,7 +22,8 @@ from pybaselines import Baseline
 from tiled.client import from_profile
 from tiled.client.array import ArrayClient
 from tiled.client.container import Container
-from tiled.queries import Eq
+
+from ._catalog import results_container
 
 ureg = UnitRegistry()
 
@@ -304,16 +305,6 @@ async def fit_array(
     return results
 
 
-def _results_container(run, catalog):
-    run_uid = run.metadata["start"]["uid"]
-    existing_runs = catalog.search(Eq("run_uid", run_uid))
-    if len(existing_runs) == 0:
-        run = catalog.create_container(metadata={"run_uid": run_uid})
-        return run
-    else:
-        return existing_runs.values().first()
-
-
 def detector_metadata(config, name):
     material = config["data"][f"{name}-sensor_material"]
     thickness = config["data"][f"{name}-sensor_thickness"]
@@ -381,7 +372,9 @@ async def fit_run_fluorescence(run: Container, results_catalog: Container):
             )
             # Let prefect know what assets we expect to produce
             if results_run is None:
-                results_run = _results_container(run, results_catalog)
+                results_run = await results_container(
+                    run_uid=run.metadata["start"]["uid"], catalog=results_catalog
+                )
             expected_table_uri = f"{results_run.uri}/{source_node.path_parts[-1]}-fit"
             node_name = source_node.path_parts[-1]
             coro = materialize(

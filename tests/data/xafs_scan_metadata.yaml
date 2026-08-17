@@ -1,0 +1,66 @@
+start:
+  beamline_id: 255-ID-Z
+  d_spacing: 3.131562
+  detectors:
+  - I0
+  edge: Ni-K
+  facility_id: Advanced Photon Source
+  hints:
+    dimensions:
+    - - - pitch2
+      - primary
+  motors:
+  - pitch2
+  num_intervals: 19
+  num_points: 20
+  plan_args:
+    args:
+    - EpicsMotor(prefix='25idDCM:AS:m6', name='pitch2', settle_time=0.0, timeout=None,
+      read_attrs=['user_readback', 'user_setpoint'], configuration_attrs=['user_offset',
+      'user_offset_dir', 'velocity', 'acceleration', 'motor_egu'])
+    - -100
+    - 100
+    detectors:
+    - IonChamber(prefix='25idcVME:3820:scaler1', name='I0', read_attrs=['raw_counts'],
+      configuration_attrs=[])
+    num: 20
+    per_step: None
+  plan_name: xafs_scan
+  plan_pattern: inner_product
+  plan_pattern_args:
+    args:
+    - EpicsMotor(prefix='25idDCM:AS:m6', name='pitch2', settle_time=0.0, timeout=None,
+      read_attrs=['user_readback', 'user_setpoint'], configuration_attrs=['user_offset',
+      'user_offset_dir', 'velocity', 'acceleration', 'motor_egu'])
+    - -100
+    - 100
+    num: 20
+  plan_pattern_module: bluesky.plan_patterns
+  plan_type: generator
+  purpose: alignment
+  sample_name: NMC-811
+  scan_id: 1
+  scan_name: Pristine
+  time: 1665065697.3635247
+  uid: 7d1daf1d-60c7-4aa7-a668-d1cd97e5335f
+  versions:
+    bluesky: 1.9.0
+    ophyd: 1.7.0
+stop:
+  exit_status: success
+  num_events:
+    primary: 20
+  reason: ''
+  run_start: 7d1daf1d-60c7-4aa7-a668-d1cd97e5335f
+  time: 1665065735.714015
+  uid: c1eac86f-d568-41a1-b601-a0e2fd6ed55e
+summary:
+  datetime: '2022-10-06 09:14:57.363525'
+  duration: 38.35049033164978
+  plan_name: xafs_scan
+  scan_id: 1
+  stream_names:
+  - primary
+  timestamp: 1665065697.3635247
+  uid: 7d1daf1d-60c7-4aa7-a668-d1cd97e5335f
+

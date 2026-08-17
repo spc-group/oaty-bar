@@ -1,0 +1,153 @@
+stop:
+  uid: 765c4857-6c86-4b77-8e9e-cf29b3693094
+  time: 1786495301.2286258
+  reason: ''
+  run_start: 1af26a59-6d65-43f1-8ac8-97462f124b3e
+  num_events:
+    primary: 1
+  exit_status: success
+start:
+  pid: 3102237
+  uid: 1af26a59-6d65-43f1-8ac8-97462f124b3e
+  time: 1786495298.0814266
+  hints: {}
+  iconfig:
+    tiled:
+      cache_filepath: /local/tiled_25idc/http_response_cache.db
+      writer_profile: haven-writer
+      writer_batch_size: 10000
+      writer_backup_directory: /local/tiled_25idc/writer_backup/
+    logging:
+      root:
+        level: DEBUG
+        handlers:
+          - stderr
+          - error_file
+        propagate: true
+      loggers:
+        haven:
+          level: DEBUG
+          handlers:
+            - stderr
+            - error_file
+            - haven_file
+          propagate: false
+        firefly:
+          level: DEBUG
+          handlers:
+            - stderr
+            - error_file
+            - firefly_file
+          propagate: false
+        exceptions:
+          level: DEBUG
+          handlers:
+            - error_file
+          propagate: false
+      version: 1
+      handlers:
+        stderr:
+          class: logging.StreamHandler
+          level: WARNING
+          stream: ext://sys.stderr
+          formatter: colorful
+        error_file:
+          when: W0
+          class: logging.handlers.TimedRotatingFileHandler
+          level: ERROR
+          filename: /net/s25data/xorApps/bluesky/25idc/logs/errors.log
+          formatter: standard
+          backupCount: 20
+        haven_file:
+          when: W0
+          class: logging.handlers.TimedRotatingFileHandler
+          level: DEBUG
+          filename: /net/s25data/xorApps/bluesky/25idc/logs/haven.log
+          formatter: standard
+          backupCount: 20
+        firefly_file:
+          when: W0
+          class: logging.handlers.TimedRotatingFileHandler
+          level: INFO
+          filename: /net/s25data/xorApps/bluesky/25idc/logs/firefly.log
+          formatter: standard
+          backupCount: 20
+      formatters:
+        colorful:
+          class: haven.logging.ColorfulFormatter
+          format: '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+          datefmt: '%Y-%m-%d %H:%M:%S'
+        standard:
+          class: null
+          format: '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+          datefmt: '%Y-%m-%d %H:%M:%S'
+      incremental: false
+      disable_existing_loggers: false
+    RUN_ENGINE:
+      DEFAULT_METADATA:
+        facility: Advanced Photon Source
+        beamline_id: 25-ID-C
+        xray_source: 2.8 mm planar undulator
+      USE_PROGRESS_BAR: true
+    ptz_cameras:
+      upstream-center: http://cam3-25idc.xray.aps.anl.gov
+      upstream-inboard: http://cam1-25idc.xray.aps.anl.gov
+      downstream-center: http://cam2-25idc.xray.aps.anl.gov
+      upstream-outboard: http://s25idc-ptz-us.xray.aps.anl.gov
+      downstream-inboard: http://cam4-25idc.xray.aps.anl.gov
+      downstream-outboard: http://s25idc-ptz-ds.xray.aps.anl.gov
+    queueserver:
+      redis_addr: jackson-hole.xray.aps.anl.gov:6379
+      redis_prefix: qs_25idc
+    device_files:
+      - /net/s25data/xorApps/bluesky/25idc/devices-common.toml
+      - /net/s25data/xorApps/bluesky/25idc/devices-downstream.toml
+      - /net/s25data/xorApps/bluesky/25idc/devices-experimental.toml
+    mock_devices: false
+    feature_flags: {}
+    data_management:
+      beamline: 25-ID-C
+      password: '**********'
+      username: s25idcuser
+      catalog_uri: https://s25idcdm.xray.aps.anl.gov:44436
+      station_name: 25IDC
+      workflow_uri: https://s25idcdm.xray.aps.anl.gov:55536
+      admin_account: s25staff
+      scheduling_uri: https://xraydtn03.xray.aps.anl.gov:11337
+      data_storage_uri: https://xraydtn03.xray.aps.anl.gov:22237
+      beamline_managers: []
+      data_transfer_uri: https://s25idcdm.xray.aps.anl.gov:33336
+    area_detector_root_path: /net/spcdata/acquisition/detector_files
+  scan_id: 1
+  facility: Advanced Photon Source
+  login_id: s25idcuser@microprobe.xray.aps.anl.gov
+  versions:
+    h5py: 3.16.0
+    epics: 3.5.10
+    numpy: 2.4.6
+    ophyd: 1.11.1
+    python: 3.13.13
+    apsbits: 2.0.2.dev21+g08b27fbaf
+    bluesky: 1.14.6
+    apstools: 1.7.10
+    pysumreg: 1.0.7
+    databroker: 1.2.5
+    matplotlib: 3.10.9
+    pyRestTable: 2020.0.10
+  detectors:
+    - counter
+  plan_args:
+    preamps:
+      - <haven.devices.srs570.SRS570PreAmplifier object at 0x7f821e27d090>
+    shutters: []
+    detectors:
+      - >-
+        <haven.devices.detectors.counter.SIS3820Counter object at
+        0x7f821e94bcb0>
+  plan_name: record_dark_current
+  plan_type: generator
+  num_points: 1
+  beamline_id: 25-ID-C
+  xray_source: 2.8 mm planar undulator
+  conda_prefix: /home/beams0/S25IDCUSER/src/haven/.pixi/envs/25idc
+  num_intervals: 0

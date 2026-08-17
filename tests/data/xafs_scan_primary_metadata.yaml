@@ -1,0 +1,98 @@
+configuration:
+  counter:
+    data:
+      counter-dark_current_signals: ["I0", "It"]
+      It-hertz_per_volt: 10000000
+      I0-hertz_per_volt: 10000000
+      counter-scaler-clock_frequency: 50000000
+    data_keys:
+      counter-dark_current_signals:
+        dtype: array
+        shape: [2]
+        dtype_numpy: '|S40'
+        source: 'soft://counter-dark_current_signals'
+    timestamps:
+      counter-dark_current_signals: 631152000
+  monochromator:
+    data:
+      monochromator-d_spacing: 3.13
+    data_keys:
+      monochromator-d_spacing:
+        dtype: number
+        dtype_numpy: <f8
+        shape: []
+        source: ca://255idbNP:d_spacing
+data_keys:
+  I0-net_current:
+    dtype: number
+    dtype_numpy: <f8
+    object_name: I0
+    shape: []
+    source: soft://I0-net_current(gain,count,clock_count,clock_frequency,counts_per_volt_second)
+    units: A
+  It-net_current:
+    dtype: number
+    dtype_numpy: <f8
+    object_name: It
+    shape: []
+    source: soft://It-net_current(gain,count,clock_count,clock_frequency,counts_per_volt_second)
+    units: A
+  energy:
+    dtype: number
+    dtype_numpy: <f8
+    limits:
+      control:
+        high: 0.0
+        low: 0.0
+      display:
+        high: 0.0
+        low: 0.0
+    object_name: energy
+    precision: 3
+    shape: []
+    source: ca://25idcVME:3820:scaler1.T
+    units: eV
+  energy-id-energy-readback:
+    dtype: number
+    dtype_numpy: <f8
+    limits:
+      control:
+        high: 0.0
+        low: 0.0
+      display:
+        high: 0.0
+        low: 0.0
+    object_name: energy
+    precision: 3
+    shape: []
+    source: ca://...
+    units: keV
+  ge_8element:
+    dtype: array
+    dtype_numpy: <u4
+    external: 'STREAM:'
+    object_name: ge_8element
+    shape:
+    - 1
+    - 8
+    - 1024
+    source: ca://XSP_Ge_8elem:HDF1:FullFileName_RBV
+  ge_8element-element0-all_event:
+    dtype: number
+    dtype_numpy: <f8
+    external: 'STREAM:'
+    object_name: ge_8element
+    shape: []
+    source: ca://XSP_Ge_8elem:HDF1:FullFileName_RBV
+hints:
+  It:
+    fields:
+    - It-net_current
+  energy:
+    fields:
+    - energy
+    - energy-id-energy-readback
+  ge_8element:
+    fields:
+    - ge_8element
+  no_device: {}

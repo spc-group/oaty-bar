@@ -200,6 +200,7 @@ def build_xdi(
     # data = xr.Dataset(coords=coords, data_vars=data_vars, attrs=attrs)
     # **old_data.data_vars, **old_data.coords, **data.data_vars}
     xarr = xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
+    print(xarr)
     xdi_text = xdi.dump(xarr, strict=strict)
     return xdi_text
 
