@@ -181,11 +181,20 @@ def parse(tokens: Iterable[Token], strict: bool) -> xr.Dataset:
             label: data[idx + 1 :: len(labels)] for idx, label in enumerate(labels[1:])
         }
         data_vars = {label: (coords.keys(), data) for label, data in dv.items()}
-    return xr.Dataset(
+    ds = xr.Dataset(
         coords=coords,
         data_vars=data_vars,
         attrs=attrs,
     )
+    # Add unit metadata from column headers
+    vals = [
+        val.split(" ") for key, val in headers.items() if key.split(".")[0] == "Column"
+    ]
+    unit_vals = [val for val in vals if len(val) == 2]
+    units = {col: unit for col, unit in unit_vals}
+    for col, unit in units.items():
+        ds[col].attrs["units"] = unit
+    return ds
 
 
 def load(xdi_text: str, strict: bool = True) -> xr.Dataset:
@@ -255,7 +264,8 @@ class XDIBackendEntrypoint(BackendEntrypoint):
 def dump(dataset: xr.Dataset, strict: bool = True) -> str:
     """Convert an Xarray to an XDI formatted string.
 
-    Depends on the xarray having the correct attrs to produce an XDI file. Namely:
+    Depends on the xarray having the correct attrs to produce an XDI
+    file. Namely:
 
     "xdi_version"
       Holds the XDI version specifier, e.g. ``"1.0"``
@@ -269,9 +279,10 @@ def dump(dataset: xr.Dataset, strict: bool = True) -> str:
       Free form text that will go in the user comment section of the
       XDI output.
 
-    The column labels section is taken from the names of the arrays in
-    the dataset. It is up to the client to ensure that headers like
-    ``"Column.1"`` match the labels of the array.
+    The column labels section and `"ColumnN.name"` headers are taken
+    from the names of the arrays in the dataset. If an array has the
+    `"units"` attr, that will be used in the `"ColumnN.name"` header
+    value.
 
     Parameters
     ==========
@@ -301,6 +312,10 @@ def dump(dataset: xr.Dataset, strict: bool = True) -> str:
         lines.extend([" ".join([*(xdi_version, *other_versions)])])
     # Header metadata
     headers = dataset.attrs.get("header", {})
+    ds_items = chain(dataset.coords.items(), dataset.data_vars.items())
+    for idx, (name, arr) in enumerate(ds_items):
+        col_name = f"{name} {arr.attrs.get('units', '')}".strip()
+        headers.setdefault(f"Column.{idx+1}", col_name)
     lines.extend([f"# {key}: {val}" for key, val in headers.items()])
     # User comments section
     user_comment = dataset.attrs.get("user_comment", "").strip()

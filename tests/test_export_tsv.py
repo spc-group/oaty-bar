@@ -9,7 +9,6 @@ from prefect import flow
 
 from oaty_bar import xdi
 from oaty_bar._export_tsv import (
-    headers,
     serialize_tsv,
 )
 
@@ -128,21 +127,6 @@ async def test_export_results(xafs_run, results_catalog, tmp_path):
         "It-net_current",
         "Ni",
     }
-
-
-def test_missing_edge(tsv_text):
-    """Can we export with missing edge information."""
-    list(
-        headers(
-            metadata={
-                "start": {
-                    "edge": None,
-                }
-            },
-            data_keys={},
-            strict=False,
-        )
-    )
 
 
 def test_data(xdi_text):

@@ -161,6 +161,7 @@ def test_load_lax():
         dataset = load(fp.read(), strict=False)
     assert isinstance(dataset, xr.Dataset)
     assert dataset.attrs["header"]["Column.1"] == "energy eV"
+    assert dataset["energy"].attrs["units"] == "eV"
 
 
 def test_load_nonstrict():
@@ -237,12 +238,11 @@ strict_dataset = xr.Dataset(
         "versions": {
             "SPC": "1.3",
         },
-        "header": {
-            "Column.1": "energy eV",
-        },
         "user_comment": "Hello\nspam and eggs\n",
     },
 )
+
+strict_dataset["energy"].attrs["units"] = "eV"
 
 minimal_dataset = xr.Dataset(
     data_vars={
@@ -269,12 +269,15 @@ def test_dump_strict():
     lines = xdi.split("\n")
     assert lines[0] == "# XDI/1.0 SPC/1.3"
     assert lines[1] == "# Column.1: energy eV"
-    assert lines[2] == "# /////"
-    assert lines[3] == "# Hello"
-    assert lines[4] == "# spam and eggs"
-    assert lines[5] == "# -----"
-    assert lines[6] == "# energy\ti0\titrans\tmutrans"
-    assert lines[7] == "  8779.0\t149013.7\t550643.089065\t-1.3070486"
+    assert lines[2] == "# Column.2: i0"
+    assert lines[3] == "# Column.3: itrans"
+    assert lines[4] == "# Column.4: mutrans"
+    assert lines[5] == "# /////"
+    assert lines[6] == "# Hello"
+    assert lines[7] == "# spam and eggs"
+    assert lines[8] == "# -----"
+    assert lines[9] == "# energy\ti0\titrans\tmutrans"
+    assert lines[10] == "  8779.0\t149013.7\t550643.089065\t-1.3070486"
     # Make sure there a trailing newline
     assert lines[-2] == "  8889.0\t117185.7\t443658.11566\t-1.3312944"
     assert lines[-1] == ""
@@ -283,9 +286,10 @@ def test_dump_strict():
 def test_dump_lax():
     xdi = dump(minimal_dataset, strict=False)
     lines = xdi.split("\n")
-    assert lines[0] == "# -----"
-    assert lines[1] == "# i0"
-    assert lines[2] == "  149013.7"
+    assert lines[0] == "# Column.1: i0"
+    assert lines[1] == "# -----"
+    assert lines[2] == "# i0"
+    assert lines[3] == "  149013.7"
 
 
 def test_dump_sparse_dataset():
@@ -295,4 +299,4 @@ def test_dump_sparse_dataset():
         attrs={"xdi_version": "1.0"},
     )
     xdi = dump(sparse_dataset)
-    assert xdi == "# XDI/1.0\n# -----\n# values\n  5\n"
+    assert xdi == "# XDI/1.0\n# Column.1: values\n# -----\n# values\n  5\n"

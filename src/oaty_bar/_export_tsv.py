@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from collections.abc import Mapping
+from itertools import chain
 from pathlib import Path
 from typing import Any
 
@@ -21,67 +22,6 @@ __all__ = ["serialize_tsv"]
 
 
 log = logging.getLogger(__name__)
-
-
-def headers(
-    metadata: Mapping[str, Mapping],
-    data_keys: Mapping[str, Mapping],
-    *,
-    strict: bool,
-):
-    """Generate individual header lines for the XDI file."""
-    start_doc = metadata.get("start", {})
-    # Version information
-    if strict:
-        versions = ["XDI/1.0"]
-        version_md = start_doc.get("versions", {})
-        versions += [f"{name}/{ver}" for name, ver in version_md.items()]
-        yield f"# {' '.join(versions)}"
-    # Column Names
-    for num, (key, info) in enumerate(data_keys.items()):
-        yield f"# Column.{num+1}: {key} {info.get('units', '')}"
-    # X-ray edge information
-    if strict and "edge" not in start_doc:
-        raise SerializationError(
-            "Metadata *edge* is required with strict XDI formatting."
-        )
-    edge_str = start_doc.get("edge", "") or ""  # Empty string in case it's `None`
-    match = re.match(r"([A-Z][a-z]?)[-_]([K-Z]\d*)", edge_str)
-    if match:
-        elem, edge = match.groups()
-        yield f"# Element.symbol: {elem}"
-        yield f"# Element.edge: {edge}"
-    elif strict:
-        raise SerializationError(
-            f"Metadata *edge* '{start_doc.get('edge')}' not in expected format."
-        )
-    # Instrument metadata
-    d_spacing = metadata.get("start", {}).get("d_spacing")
-    if d_spacing == "None":
-        d_spacing = None
-    if d_spacing is None and strict:
-        raise SerializationError(
-            "Argument *d_spacing* cannot be none with strict XDI formatting."
-        )
-    elif d_spacing is not None:
-        yield f"# Mono.d_spacing: {d_spacing}"
-    # Facility information
-    if "time" in start_doc or strict:
-        start_time = dt.datetime.fromtimestamp(start_doc["time"], dt.timezone.utc)
-        start_time = start_time.astimezone()
-        yield f"# Scan.start_time: {start_time.strftime('%Y-%m-%d %H:%M:%S%z')}"
-    md_mappings = [
-        # metadata key, XDI key
-        ("facility_id", "Facility.name"),
-        ("beamline_id", "Beamline.name"),
-        ("uid", "uid"),
-    ]
-    md_mappings = [key for key in md_mappings if key[0] in start_doc]
-    for md_key, xdi_key in md_mappings:
-        yield f"# {xdi_key}: {start_doc[md_key]}"
-    # Header end token
-    if strict:
-        yield "# -------------"
 
 
 def data_keys(metadata: Mapping[str, Any]) -> dict[str, dict]:
@@ -130,8 +70,6 @@ def build_xdi(
     data_keys_ = data_keys(stream_metadata)
     start_doc = metadata.get("start", {})
     headers = {**old_data.attrs.get("header", {})}
-    for num, (key, info) in enumerate(data_keys_.items()):
-        headers[f"Column.{num+1}"] = f"{key} {info.get('units', '')}"
     # X-ray edge and d-spacing is required for proper XDI files
     if strict and "edge" not in start_doc:
         raise SerializationError(
@@ -197,10 +135,13 @@ def build_xdi(
             key: (name, val.data) for key, val in data_vars.items() if key != name
         }
     # Build a combined dataset from the old and new data
-    # data = xr.Dataset(coords=coords, data_vars=data_vars, attrs=attrs)
-    # **old_data.data_vars, **old_data.coords, **data.data_vars}
     xarr = xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
-    print(xarr)
+    units = {
+        name: data_keys_.get(name, {}).get("units") for name in data.data_vars.keys()
+    }
+    for name, arr in chain(xarr.data_vars.items(), xarr.coords.items()):
+        if name in units.keys():
+            arr.attrs.setdefault("units", units[name])
     xdi_text = xdi.dump(xarr, strict=strict)
     return xdi_text
 
