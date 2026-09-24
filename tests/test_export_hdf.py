@@ -6,6 +6,7 @@ from unittest import mock
 import h5py
 import numpy as np
 import pandas as pd
+import punx.validate
 import pytest
 import pytest_asyncio
 from nexusformat.nexus import NXFile
@@ -302,6 +303,21 @@ async def test_idempotence(xafs_run, results_catalog, mocker):
         results = fd["7d1daf1d-60c7-4aa7-a668-d1cd97e5335f/results"]
         assert "ge_8element_fit" in results.keys()
         assert "Ni" in results["ge_8element_fit"].keys()
-        # Check that a link is created in the 'data' group
-        # data = fd["7d1daf1d-60c7-4aa7-a668-d1cd97e5335f/data"]
-        # assert "ge_8element-Ni" in data.keys()
+
+
+@pytest.mark.asyncio
+async def test_valid_nexus_spec(xafs_run, results_catalog, mocker, tmp_path):
+    """Check that the exported file is a valid NeXus base."""
+    h5path = tmp_path / "output.h5"
+    # buff = io.BytesIO()
+
+    @flow()
+    async def do():
+        await serialize_hdf(h5path, xafs_run, results_runs=results_catalog)
+
+    await do()
+    validator = punx.validate.Data_File_Validator()
+    try:
+        result = validator.validate(h5path)
+    finally:
+        validator.close()

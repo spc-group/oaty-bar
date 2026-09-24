@@ -34,8 +34,11 @@ prefect = { version = ">=3.7.1, <4", extras = ["sqlalchemy", "slack"] }
 platformdirs = ">=4.9.6, <5"
 psycopg = ">=3.3.4, <4"
 
-[environments]
-dev = { features = ["dev"] }
+[environments.dev]
+features = ["dev"]
+
+[environments.dev.pypi-dependencies]
+punx = ">=0.3.5, <0.4"
 
 [activation.env]
 PREFECT_SERVER_ANALYTICS_ENABLED="false"
