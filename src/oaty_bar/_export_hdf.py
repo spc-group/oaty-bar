@@ -506,7 +506,7 @@ async def serialize_hdf(
     log = get_run_logger()
     if isinstance(buff, BytesIO):
         buff.seek(0)
-    h5_mode = "x"
+    h5_mode = "a"
     log.info(f"Opening file '{buff}', in mode '{h5_mode}'")
     uid = run.metadata.get("start", {}).get("uid", "")
     with h5py.File(buff, mode=h5_mode) as nxfile:
