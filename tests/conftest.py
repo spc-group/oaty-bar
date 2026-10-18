@@ -1,8 +1,12 @@
+import socket
+
 import pytest
 from prefect.testing.utilities import prefect_test_harness
+from pytest import MonkeyPatch
 from tiled.client import Context, from_context
 from tiled.server.app import build_app_from_config
 
+from .tiled_server import TiledServerInfo
 from .tiled_trees import build_tree
 
 
@@ -38,3 +42,40 @@ def results_catalog(tmp_path):
     with Context.from_app(build_app_from_config(one_tree_config)) as context:
         client = from_context(context)
         yield client
+
+
+TILED_PROFILES = """
+tiled_read_only:
+  uri: {uri}
+tiled_writable:
+  uri: {uri}?api_key={api_key}
+"""
+
+
+@pytest.fixture(scope="session")
+def tiled_server(tmp_path_factory, session_mocker):
+    monkeypatch = MonkeyPatch()
+    tmp_path = tmp_path_factory.mktemp("tiled")
+    # Get a random open port
+    with socket.socket() as sock:
+        sock.bind(("", 0))
+        port = sock.getsockname()[1]
+    server_info = TiledServerInfo(tmp_path, port=str(port))
+    monkeypatch.setenv("TILED_CONFIG", str(tmp_path / "server_config.yml"))
+    # Start the tiled server
+    # Set up the profiles corresponding to the server
+    profile_dir = tmp_path / "tiled" / "profiles"
+    profile_dir.mkdir(parents=True)
+    session_mocker.patch("tiled.profiles.paths", [profile_dir])
+    with open(profile_dir / "default.yml", mode="w") as fp:
+        fp.write(
+            TILED_PROFILES.format(uri=server_info.uri, api_key=server_info.api_key)
+        )
+    try:
+        server_info.start()
+        # Execute tests
+        yield server_info
+    finally:
+        # Make sure the server gets cleaned up when we're done
+        monkeypatch.undo()
+        server_info.stop()
