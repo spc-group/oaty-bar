@@ -81,7 +81,9 @@ class TiledServerInfo:
         assert tiled_exe is not None
         tiled_cmd = [tiled_exe, "serve", "config"]
         cmd = " ".join(tiled_cmd)
-        self.executor = HTTPExecutor(cmd, self.uri, "(405|200)", stdout=1, stderr=2)
+        self.executor = HTTPExecutor(
+            cmd, self.uri, "(405|200)", stdout=1, stderr=2, timeout=10
+        )
         self.executor.start()
 
     def stop(self):
@@ -90,6 +92,7 @@ class TiledServerInfo:
         if tiled_process is None:
             warnings.warn("Cannot stop server that was not started.")
             return
+        tiled_process._timeout = 1  # We need to force kill this for some reason
         tiled_process.stop()
         tiled_process = None
 

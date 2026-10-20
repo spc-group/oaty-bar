@@ -3,7 +3,7 @@ import socket
 import pytest
 from prefect.testing.utilities import prefect_test_harness
 from pytest import MonkeyPatch
-from tiled.client import Context, from_context
+from tiled.client import Context, from_context, from_uri
 from tiled.server.app import build_app_from_config
 
 from .tiled_server import TiledServerInfo
@@ -60,6 +60,7 @@ def tiled_server(tmp_path_factory, session_mocker):
     with socket.socket() as sock:
         sock.bind(("", 0))
         port = sock.getsockname()[1]
+    port = 8719
     server_info = TiledServerInfo(tmp_path, port=str(port))
     monkeypatch.setenv("TILED_CONFIG", str(tmp_path / "server_config.yml"))
     # Start the tiled server
@@ -79,3 +80,18 @@ def tiled_server(tmp_path_factory, session_mocker):
         # Make sure the server gets cleaned up when we're done
         monkeypatch.undo()
         server_info.stop()
+
+
+@pytest.fixture()
+def tiled_catalog(tiled_server):
+    catalog = from_uri(tiled_server.uri, api_key=tiled_server.api_key)
+    existing_keys = list(catalog.keys())
+    try:
+        yield catalog
+    finally:
+        # Remove any transiently created datasets
+        new_keys = [key for key in catalog.keys() if key not in existing_keys]
+        for key in new_keys:
+            catalog[key].delete(recursive=True, external_only=False)
+        catalog.context.close()
+        del catalog
