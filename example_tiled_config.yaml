@@ -1,0 +1,28 @@
+uvicorn:
+  host: localhost
+  port: 8891
+
+streaming_cache:
+  uri: memory
+
+authentication:
+  allow_anonymous_access: true
+  single_user_api_key: "secret"
+
+trees:
+  - path: /
+    tree: catalog
+    args:
+      uri: "sqlite:////tmp/tiled_demo/catalog.db"
+      writable_storage:
+        - "/tmp/tiled_demo/data/"
+        - "duckdb:////tmp/tiled_demo/data/"
+      # This creates the database if it does not exist. This is convenient, but in
+      # a horizontally-scaled deployment, this can be a race condition and multiple
+      # containers may simultaneously attempt to create the database.
+      # If that is a problem, set this to false, and run:
+      #
+      # tiled catalog init URI
+      #
+      # separately.
+      init_if_not_exists: true

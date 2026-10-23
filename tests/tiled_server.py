@@ -36,6 +36,8 @@ trees:
       # tiled catalog init URI
       #
       # separately.
+      readable_storage:
+        - "{storage_path}"
       init_if_not_exists: true
 """
 
@@ -82,7 +84,7 @@ class TiledServerInfo:
         tiled_cmd = [tiled_exe, "serve", "config"]
         cmd = " ".join(tiled_cmd)
         self.executor = HTTPExecutor(
-            cmd, self.uri, "(405|200)", stdout=1, stderr=2, timeout=10
+            cmd, self.uri, "(405|200)", stdout=1, stderr=2, timeout=20
         )
         self.executor.start()
 

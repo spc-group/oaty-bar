@@ -1,0 +1,67 @@
+"""An ipython script that generates simulated Bluesky documents.
+
+Tests can read these documents from `bluesky_scan_docs.jsonl` and pass
+them to a Tiled callback to simulate a scan.
+
+"""
+
+import json
+from pprint import pprint
+from pathlib import Path
+from tempfile import mkdtemp
+
+import bluesky.plan_stubs as bps  # noqa: F401
+import bluesky.plans as bp  # noqa: F401
+import bluesky.preprocessors as bpp  # noqa: F401
+from bluesky.run_engine import RunEngine, autoawait_in_bluesky_event_loop
+
+from ophyd_async import sim
+from ophyd_async.core import StaticPathProvider, StaticFilenameProvider, init_devices
+
+# Create a run engine and make ipython use it for `await` commands
+RE = RunEngine({}, call_returns_result=True)
+autoawait_in_bluesky_event_loop()
+
+
+# Callbacks to write the jsonl documents for later testing
+data_dir = Path(__file__).parent
+
+def jsonl_writer(destination: Path):
+    def _writer(name, doc):
+        mode = 'w' if name == "start" else 'a'
+        with open(destination, mode=mode, encoding='utf-8') as fd:
+            fd.write(json.dumps([name, doc], ensure_ascii=False) + '\n')
+    return _writer
+            
+def printit(name, doc):
+    print(f"## {name}")
+    pprint(doc)
+    print("")
+    
+RE.subscribe(printit)
+RE.subscribe(jsonl_writer(data_dir / "bluesky_scan_docs.jsonl"))
+
+# Make a pattern generator that uses the motor positions
+# to make a test pattern. This simulates the real life process
+# of X-ray scattering off a sample
+pattern_generator = sim.PatternGenerator()
+
+# Make a path provider that makes UUID filenames within a static
+# temporary directory
+path_provider = StaticPathProvider(StaticFilenameProvider("bdet_data"), data_dir.resolve())
+
+# All Devices created within this block will be
+# connected and named at the end of the with block
+with init_devices():
+    # Create a sample stage with X and Y motors that report their positions
+    # to the pattern generator
+    stage = sim.SimStage(pattern_generator)
+    # Make a detector device that gives the point value of the pattern generator
+    # when triggered
+    pdet = sim.SimPointDetector(pattern_generator)
+    # Make a detector device that gives a gaussian blob with intensity based
+    # on the point value of the pattern generator when triggered
+    bdet = sim.SimBlobDetector(path_provider, pattern_generator)
+
+
+RE(bp.grid_scan([pdet, bdet], stage.x, 1, 2, 3, stage.y, 2, 3, 3))
