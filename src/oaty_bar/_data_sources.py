@@ -17,9 +17,8 @@ async def process_data(…):
 
 import asyncio
 import io
-from asyncio import Queue
-from collections.abc import AsyncGenerator, Mapping, Sequence
-from dataclasses import dataclass, field
+from asyncio import Queue, Task
+from collections.abc import AsyncGenerator, Sequence
 from pathlib import PurePath
 from typing import Any
 from urllib.parse import urlencode
@@ -30,36 +29,34 @@ import pyarrow.feather
 import xarray as xr
 import zarr.api.asynchronous as zarraio
 from tiled.client.array import ArrayClient
-from tiled.client.base import BaseClient
 from tiled.client.composite import CompositeClient
 from tiled.client.container import Container
 from tiled.client.dataframe import DataFrameClient
 from websockets import ConnectionClosed
 from websockets.asyncio.client import connect
 
+# @dataclass()
+# class FetchItem:
+#     client: BaseClient
+#     path: PurePath
+#     which: slice | tuple[int]
 
-@dataclass()
-class FetchItem:
-    client: BaseClient
-    path: PurePath
-    which: slice | tuple[int]
 
+# @dataclass()
+# class WorkItem:
+#     """An item of work that should be done when possible.
 
-@dataclass()
-class WorkItem:
-    """An item of work that should be done when possible.
+#     Parameters
+#     ==========
+#     data
+#       Known data that has already been fetched.
+#     to_fetch
+#       New data that should be retrieved.
 
-    Parameters
-    ==========
-    data
-      Known data that has already been fetched.
-    to_fetch
-      New data that should be retrieved.
+#     """
 
-    """
-
-    data: xr.Dataset | None = None
-    to_fetch: Mapping[str:FetchItem] = field(default_factory=dict)
+#     data: xr.Dataset | None = None
+#     to_fetch: Mapping[str:FetchItem] = field(default_factory=dict)
 
 
 async def node_websocket(run: Container) -> AsyncGenerator:
@@ -81,60 +78,94 @@ async def node_websocket(run: Container) -> AsyncGenerator:
             break
 
 
-async def listen_to_array(client: ArrayClient, work_queue: Queue[WorkItem]) -> None:
+async def fetch_array(zarray, selection: slice | tuple[int]):
+    name = zarray.name.strip("/")
+    print(f"## Fetching zarr '{name}'. {selection=}")
+    # Get the array from the API
+    arr = await zarray.getitem(selection)
+    print(f"## Fetched zarr '{name}'. {selection=}")
+    # Turn it into the standard xarray structure
+    dims = ("seq_num", *[f"{name}-dim{idx}" for idx in range(1, arr.ndim)])
+    xarr = xr.Dataset(
+        data_vars={
+            name: (dims, arr),
+        },
+        coords={},
+        attrs={},
+    )
+    return xarr
+
+
+async def zarr_array(client):
+    path = PurePath("/".join(client.path_parts))
+    base_uri = client.uri.split("/api/")[0]
+    zarr_uri = f"{base_uri}/zarr/v3/{path.parent}"
+    zgroup = await zarraio.open_group(
+        store=zarr_uri,
+        mode="r",
+    )
+    arr = await zgroup.getitem(client.path_parts[-1])
+    return arr
+
+
+async def listen_to_array(client: ArrayClient, work_queue: Queue[Task]) -> None:
     tasks = []
     schema = None
     data_name = client.path_parts[-1]
-    path = PurePath("/".join(client.path_parts))
+    zarr = await zarr_array(client)
     async with asyncio.TaskGroup() as tg:
         async for message in node_websocket(client):
             if message["type"] == "array-ref":
                 start = message["patch"]["offset"][0]
                 num = message["patch"]["shape"][0]
-                fetch_item = FetchItem(
-                    client=client, path=path, which=slice(start, start + num)
-                )
-                work_item = WorkItem(data=None, to_fetch={data_name: fetch_item})
-                await work_queue.put(work_item)
+                task = asyncio.create_task(fetch_array(zarr, slice(start, start + num)))
+                await work_queue.put(task)
 
 
-async def listen_to_dataframe(
-    client: DataFrameClient, work_queue: Queue[WorkItem]
-) -> None:
+async def existing_data(data):
+    """A dummy coroutine that just returns existing data.
+
+    This lets us create tasks that actually don't have to do any real
+    awaiting.
+
+    """
+    return data
+
+
+async def listen_to_dataframe(client: DataFrameClient, work_queue: Queue[Task]) -> None:
     tasks = []
-    async with asyncio.TaskGroup() as tg:
-        async for message in node_websocket(client):
-            if message["type"] == "table-data":
-                data = pyarrow.feather.read_feather(io.BytesIO(message["payload"]))
-                data = xr.Dataset.from_dataframe(data)
-                work_item = WorkItem(data=data, to_fetch={})
-                await work_queue.put(work_item)
-            # elif message['type'] == 'table-schema':
-            #     schema_encoded = message['arrow_schema']
-            #     b64_prefix = "data:application/vnd.apache.arrow.file;base64,"
-            #     schema = pyarrow.ipc.read_schema(io.BytesIO(base64.b64decode(schema_encoded[len(b64_prefix):])))
+    async for message in node_websocket(client):
+        if message["type"] == "table-data":
+            data = pyarrow.feather.read_feather(io.BytesIO(message["payload"]))
+            data = xr.Dataset.from_dataframe(data)
+            new_task = asyncio.create_task(existing_data(data))
+            await work_queue.put(new_task)
+        # elif message['type'] == 'table-schema':
+        #     schema_encoded = message['arrow_schema']
+        #     b64_prefix = "data:application/vnd.apache.arrow.file;base64,"
+        #     schema = pyarrow.ipc.read_schema(io.BytesIO(base64.b64decode(schema_encoded[len(b64_prefix):])))
 
 
-async def listen_to_composite(client: CompositeClient, work_queue: Queue[WorkItem]):
+async def listen_to_composite(client: CompositeClient, work_queue: Queue[Task]):
     tasks = []
     # We need to intercept the work_queue so we can merge composite datasets
-    sub_queue = Queue()
+    sub_queue: Queue[Task] = Queue()
 
     async def link_queues(work_queue, sub_queue):
         while True:
             datum = await sub_queue.get()
-            # print("Intercepted:", datum)
             await work_queue.put(datum)
 
     async with asyncio.TaskGroup() as tg:
         tasks = [
             tg.create_task(link_queues(work_queue, sub_queue)),
-            tg.create_task(listen_to_container(client, sub_queue)),
+            tg.create_task(listen_to_container(client, work_queue=sub_queue)),
         ]
 
 
-async def listen_to_container(client: Container, work_queue: Queue):
+async def listen_to_container(client: Container, *, work_queue: Queue[Task]):
     tasks = []
+
     async with asyncio.TaskGroup() as tg:
         async for message in node_websocket(client):
             if message["type"] == "container-child-created":
@@ -161,7 +192,7 @@ LISTENERS = {
 }
 
 
-async def wait_for_run_close(run, work_queue: Queue):
+async def wait_for_run_close(run, work_queue: Queue[Task]):
     """Check for a stop document, and close all the things."""
     websocket_messages = node_websocket(run.parent)
     async for message in websocket_messages:
@@ -174,65 +205,60 @@ async def wait_for_run_close(run, work_queue: Queue):
     await websocket_messages.aclose()
 
 
-async def fetch_items(
-    uri: str, work_queue: Queue[WorkItem], data_queue: Queue[xr.Dataset]
-) -> None:
-    base_uri = uri.split("/api/")[0]
-    zarr_uri = f"{base_uri}/zarr/v3/"
-    group = await zarraio.open_group(
-        store=zarr_uri,
-        mode="r",
-    )
-    while True:
-        try:
-            work = await work_queue.get()
-        except asyncio.QueueShutDown:
-            break
-        fetched_vars = {}
-        fetched_coords = {}
-        # Fetch the data
-        for name, item in work.to_fetch.items():
-            zarray = await group.getitem(str(item.path))
-            arr = await zarray.getitem(item.which)
-            if name in ["seq_num", "time"]:
-                fetched_coords[name] = arr
-            else:
-                dims = ("seq_num", *[f"{name}-dim{idx}" for idx in range(1, arr.ndim)])
-                fetched_vars[name] = (dims, arr)
-        # Build a new xarray that combines the old and new data
-        new_xarr = xr.Dataset(
-            data_vars={
-                **getattr(work.data, "data_vars", {}),
-                **fetched_vars,
-            },
-            coords={
-                **getattr(work.data, "coords", {}),
-                **fetched_coords,
-            },
-            attrs=getattr(work.data, "attrs", {}),
-        )
-        await data_queue.put(new_xarr)
-    data_queue.shutdown()
+# async def fetch_items(
+#     uri: str, work_queue: Queue[Task], data_queue: Queue[xr.Dataset]
+# ) -> None:
+#     while True:
+#         try:
+#             work = await work_queue.get()
+#         except asyncio.QueueShutDown:
+#             break
+#         fetched_vars = {}
+#         fetched_coords = {}
+#         # Fetch the data
+#         # for name, item in work.to_fetch.items():
+#         #     zarray = await group.getitem(str(item.path))
+#         #     arr = await zarray.getitem(item.which)
+#         #     if name in ["seq_num", "time"]:
+#         #         fetched_coords[name] = arr
+#         #     else:
+#         #         dims = ("seq_num", *[f"{name}-dim{idx}" for idx in range(1, arr.ndim)])
+#         #         fetched_vars[name] = (dims, arr)
+#         # Build a new xarray that combines the old and new data
+#         # new_xarr = xr.Dataset(
+#         #     data_vars={
+#         #         **getattr(work.data, "data_vars", {}),
+#         #         **fetched_vars,
+#         #     },
+#         #     coords={
+#         #         **getattr(work.data, "coords", {}),
+#         #         **fetched_coords,
+#         #     },
+#         #     attrs=getattr(work.data, "attrs", {}),
+#         # )
+#         await data_queue.put(work)
+#     data_queue.shutdown()
 
 
 async def bluesky_run_events(run: Container):
-    work_queue: Queue = Queue()
-    data_queue: Queue = Queue()
-    # Background task that puts new
+    # Queues hold fetch-tasks and another for the results of that work
+    work_queue: Queue[Task] = Queue()
     async with asyncio.TaskGroup() as tg:
         closing_task = tg.create_task(wait_for_run_close(run, work_queue=work_queue))
         listener_task = tg.create_task(listen_to_container(run, work_queue=work_queue))
-        fetcher_task = tg.create_task(
-            fetch_items(uri=run.uri, work_queue=work_queue, data_queue=data_queue)
-        )
+        # fetcher_task = tg.create_task(
+        #     fetch_items(uri=run.uri, work_queue=work_queue, data_queue=data_queue)
+        # )
         while True:
             try:
-                next_data = await data_queue.get()
+                next_task = await work_queue.get()
             except asyncio.QueueShutDown:
                 break
-            yield next_data
+            print("### Found data")
+            print(next_task)
+            await next_task
+            yield next_task.result()
         listener_task.cancel()
-        fetcher_task.cancel()
 
 
 async def bluesky_stream_events_deprecated(
