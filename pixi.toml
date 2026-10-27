@@ -33,6 +33,7 @@ dmax = ">=0.0.10, <0.1.0"
 prefect = { version = ">=3.7.1, <4", extras = ["sqlalchemy", "slack"] }
 platformdirs = ">=4.9.6, <5"
 psycopg = ">=3.3.4, <4"
+anyio = ">=4.15.1, <5"
 
 [environments.dev]
 features = ["dev"]

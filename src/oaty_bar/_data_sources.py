@@ -15,19 +15,20 @@ async def process_data(…):
 
 """
 
-import asyncio
 import io
 from asyncio import Queue, Task
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator
 from pathlib import PurePath
-from typing import Any
 from urllib.parse import urlencode
 
+import anyio
 import msgpack
 import pyarrow
 import pyarrow.feather
 import xarray as xr
 import zarr.api.asynchronous as zarraio
+from anyio import TaskHandle, create_task_group
+from anyio.abc import ObjectSendStream, TaskGroup
 from tiled.client.array import ArrayClient
 from tiled.client.composite import CompositeClient
 from tiled.client.container import Container
@@ -80,10 +81,8 @@ async def node_websocket(run: Container) -> AsyncGenerator:
 
 async def fetch_array(zarray, selection: slice | tuple[int]):
     name = zarray.name.strip("/")
-    print(f"## Fetching zarr '{name}'. {selection=}")
     # Get the array from the API
     arr = await zarray.getitem(selection)
-    print(f"## Fetched zarr '{name}'. {selection=}")
     # Turn it into the standard xarray structure
     dims = ("seq_num", *[f"{name}-dim{idx}" for idx in range(1, arr.ndim)])
     xarr = xr.Dataset(
@@ -108,18 +107,19 @@ async def zarr_array(client):
     return arr
 
 
-async def listen_to_array(client: ArrayClient, work_queue: Queue[Task]) -> None:
+async def listen_to_array(
+    client: ArrayClient, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
+) -> None:
     tasks = []
     schema = None
     data_name = client.path_parts[-1]
     zarr = await zarr_array(client)
-    async with asyncio.TaskGroup() as tg:
-        async for message in node_websocket(client):
-            if message["type"] == "array-ref":
-                start = message["patch"]["offset"][0]
-                num = message["patch"]["shape"][0]
-                task = asyncio.create_task(fetch_array(zarr, slice(start, start + num)))
-                await work_queue.put(task)
+    async for message in node_websocket(client):
+        if message["type"] == "array-ref":
+            start = message["patch"]["offset"][0]
+            num = message["patch"]["shape"][0]
+            task = tg.create_task(fetch_array(zarr, slice(start, start + num)))
+            await sender.send(task)
 
 
 async def existing_data(data):
@@ -132,56 +132,56 @@ async def existing_data(data):
     return data
 
 
-async def listen_to_dataframe(client: DataFrameClient, work_queue: Queue[Task]) -> None:
+async def listen_to_dataframe(
+    client: DataFrameClient, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
+) -> None:
     tasks = []
     async for message in node_websocket(client):
         if message["type"] == "table-data":
             data = pyarrow.feather.read_feather(io.BytesIO(message["payload"]))
             data = xr.Dataset.from_dataframe(data)
-            new_task = asyncio.create_task(existing_data(data))
-            await work_queue.put(new_task)
+            new_task = tg.create_task(existing_data(data))
+            await sender.send(new_task)
         # elif message['type'] == 'table-schema':
         #     schema_encoded = message['arrow_schema']
         #     b64_prefix = "data:application/vnd.apache.arrow.file;base64,"
         #     schema = pyarrow.ipc.read_schema(io.BytesIO(base64.b64decode(schema_encoded[len(b64_prefix):])))
 
 
-async def listen_to_composite(client: CompositeClient, work_queue: Queue[Task]):
+async def listen_to_composite(
+    client: CompositeClient, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
+):
     tasks = []
     # We need to intercept the work_queue so we can merge composite datasets
+    expected_keys = client.metadata["data_keys"].keys()
     sub_queue: Queue[Task] = Queue()
 
-    async def link_queues(work_queue, sub_queue):
+    async def link_queues(sender, sub_queue):
         while True:
             datum = await sub_queue.get()
-            await work_queue.put(datum)
+            await sender.send(datum)
 
-    async with asyncio.TaskGroup() as tg:
-        tasks = [
-            tg.create_task(link_queues(work_queue, sub_queue)),
-            tg.create_task(listen_to_container(client, work_queue=sub_queue)),
-        ]
+    tg.create_task(link_queues(sender, sub_queue)),
+    tg.create_task(listen_to_container(client, sender=sender, tg=tg)),
 
 
-async def listen_to_container(client: Container, *, work_queue: Queue[Task]):
-    tasks = []
-
-    async with asyncio.TaskGroup() as tg:
-        async for message in node_websocket(client):
-            if message["type"] == "container-child-created":
-                # New child, defer to a specific listener to handle updates
-                child = client.base[message["key"]]
-                listeners = [
-                    listener
-                    for Klass, listener in LISTENERS.items()
-                    if isinstance(child, Klass)
-                ]
-                try:
-                    listener = listeners[0]
-                except IndexError as exc:
-                    raise KeyError(child.__class__.__mro__) from exc
-                task = tg.create_task(listener(child, work_queue=work_queue))
-                tasks.append(task)
+async def listen_to_container(
+    client: Container, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
+):
+    async for message in node_websocket(client):
+        if message["type"] == "container-child-created":
+            # New child, defer to a specific listener to handle updates
+            child = client.base[message["key"]]
+            listeners = [
+                listener
+                for Klass, listener in LISTENERS.items()
+                if isinstance(child, Klass)
+            ]
+            try:
+                listener = listeners[0]
+            except IndexError as exc:
+                raise KeyError(child.__class__.__mro__) from exc
+            tg.start_soon(listener, child, sender, tg)
 
 
 LISTENERS = {
@@ -192,7 +192,7 @@ LISTENERS = {
 }
 
 
-async def wait_for_run_close(run, work_queue: Queue[Task]):
+async def wait_for_run_close(run, sender: ObjectSendStream[TaskHandle]):
     """Check for a stop document, and close all the things."""
     websocket_messages = node_websocket(run.parent)
     async for message in websocket_messages:
@@ -200,7 +200,7 @@ async def wait_for_run_close(run, work_queue: Queue[Task]):
             continue
         md = message["metadata"]
         if "stop" in md.keys():
-            work_queue.shutdown()
+            sender.close()
             break
     await websocket_messages.aclose()
 
@@ -240,68 +240,60 @@ async def wait_for_run_close(run, work_queue: Queue[Task]):
 #     data_queue.shutdown()
 
 
-async def bluesky_run_events(run: Container):
+async def bluesky_run_events(run: Container, max_tasks: int = 100):
     # Queues hold fetch-tasks and another for the results of that work
-    work_queue: Queue[Task] = Queue()
-    async with asyncio.TaskGroup() as tg:
-        closing_task = tg.create_task(wait_for_run_close(run, work_queue=work_queue))
-        listener_task = tg.create_task(listen_to_container(run, work_queue=work_queue))
-        # fetcher_task = tg.create_task(
-        #     fetch_items(uri=run.uri, work_queue=work_queue, data_queue=data_queue)
-        # )
-        while True:
-            try:
-                next_task = await work_queue.get()
-            except asyncio.QueueShutDown:
-                break
-            print("### Found data")
-            print(next_task)
-            await next_task
-            yield next_task.result()
-        listener_task.cancel()
+    sender, receiver = anyio.create_memory_object_stream(max_buffer_size=max_tasks)
+    async with create_task_group() as tg, receiver, sender:
+        closing_task = tg.start_soon(wait_for_run_close, run, sender)
+        listener_task = tg.start_soon(listen_to_container, run, sender, tg)
+        # Wait for new data to be available so we can generate it
+        async for next_task in receiver:
+            data = await next_task
+            yield data
+        tg.cancel()
 
 
-async def bluesky_stream_events_deprecated(
-    stream: Container, signals: Sequence[str] | None = None
-) -> AsyncGenerator[xr.Dataset, Any]:
-    if signals is None:
-        signals = stream.keys()
-    base_uri = stream.uri.split("/api/")[0]
-    stream_path = "/".join(stream.path_parts)
-    zarr_uri = f"{base_uri}/zarr/v3/{stream_path}"
-    group = await zarraio.open_group(
-        store=zarr_uri,
-        mode="r",
-    )
-    # Sort out which arrays we want to fetch
-    data_keys = stream.metadata["data_keys"]
-    data_keys.setdefault("seq_num", "internal/seq_num")
-    if signals is not None:
-        data_keys = {
-            sig: data_key for sig, data_key in data_keys.items() if sig in signals
-        }
-    paths = {
-        sig: (f"internal/{sig}" if "external" not in data_key else sig)
-        for sig, data_key in data_keys.items()
-    }
+# async def bluesky_stream_events_deprecated(
+#     stream: Container, signals: Sequence[str] | None = None
+# ) -> AsyncGenerator[xr.Dataset, Any]:
+#     if signals is None:
+#         signals = stream.keys()
+#     base_uri = stream.uri.split("/api/")[0]
+#     stream_path = "/".join(stream.path_parts)
+#     zarr_uri = f"{base_uri}/zarr/v3/{stream_path}"
+#     group = await zarraio.open_group(
+#         store=zarr_uri,
+#         mode="r",
+#     )
+#     # Sort out which arrays we want to fetch
+#     data_keys = stream.metadata["data_keys"]
+#     data_keys.setdefault("seq_num", "internal/seq_num")
+#     if signals is not None:
+#         data_keys = {
+#             sig: data_key for sig, data_key in data_keys.items() if sig in signals
+#         }
+#     paths = {
+#         sig: (f"internal/{sig}" if "external" not in data_key else sig)
+#         for sig, data_key in data_keys.items()
+#     }
 
-    # Do the fetching
-    async def data_arrays(signal, path):
-        zarray = await group.getitem(path)
-        arr = await zarray.getitem(slice(None))
-        return (signal, arr)
+#     # Do the fetching
+#     async def data_arrays(signal, path):
+#         zarray = await group.getitem(path)
+#         arr = await zarray.getitem(slice(None))
+#         return (signal, arr)
 
-    zarray_items = await asyncio.gather(
-        *[data_arrays(sig, path) for sig, path in paths.items()]
-    )
-    zarrays = {sig: arr for sig, arr in zarray_items}
-    if zarrays != {}:
-        ds = xr.Dataset(
-            data_vars={
-                sig: ("seq_num", arr)
-                for sig, arr in zarrays.items()
-                if sig != "seq_num"
-            },
-            coords={"seq_num": zarrays["seq_num"]} if "seq_num" in zarrays else {},
-        )
-        yield ds
+#     zarray_items = await asyncio.gather(
+#         *[data_arrays(sig, path) for sig, path in paths.items()]
+#     )
+#     zarrays = {sig: arr for sig, arr in zarray_items}
+#     if zarrays != {}:
+#         ds = xr.Dataset(
+#             data_vars={
+#                 sig: ("seq_num", arr)
+#                 for sig, arr in zarrays.items()
+#                 if sig != "seq_num"
+#             },
+#             coords={"seq_num": zarrays["seq_num"]} if "seq_num" in zarrays else {},
+#         )
+#         yield ds

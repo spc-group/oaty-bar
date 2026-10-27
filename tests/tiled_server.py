@@ -84,7 +84,7 @@ class TiledServerInfo:
         tiled_cmd = [tiled_exe, "serve", "config"]
         cmd = " ".join(tiled_cmd)
         self.executor = HTTPExecutor(
-            cmd, self.uri, "(405|200)", stdout=1, stderr=2, timeout=20
+            cmd, self.uri, "(405|200)", stdout=2, stderr=2, timeout=20
         )
         self.executor.start()
 
