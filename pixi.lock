@@ -533,6 +533,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/b3/6b4067be973ae96ba0d615946e314c5ae35f9f993eca561b356540bb0c2b/alabaster-1.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/80/d5/2b306245e662d014a805133d2188c7802c0f43cb08a1f9c246e83c924b4a/pytest_postgresql-9.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/6b/cfaf3d39f25132c156a068f6b805576c9103a84086019507c70e1911ee7d/black-26.5.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/83/8e/742ff3e69cbd8a0525618440b37e04963dd13a4b805ee707fe25d7455d52/pyfai-2026.5.0-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
@@ -3999,6 +4000,19 @@ packages:
   - h2>=4,<5 ; extra == 'h2'
   - pysocks>=1.5.6,!=1.5.7,<2.0 ; extra == 'socks'
   - backports-zstd>=1.0.0 ; python_full_version < '3.14' and extra == 'zstd'
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/80/d5/2b306245e662d014a805133d2188c7802c0f43cb08a1f9c246e83c924b4a/pytest_postgresql-9.1.1-py3-none-any.whl
+  name: pytest-postgresql
+  version: 9.1.1
+  sha256: fcd6e100d9d5550c3192c8386afa6632c2963ca808b0617d47ed16dd037a224c
+  requires_dist:
+  - mirakuru>=2.6.0
+  - packaging
+  - port-for>=0.7.3
+  - psycopg>=3.0.0
+  - pytest>=8.2
+  - aiofiles>=23.0 ; extra == 'async'
+  - pytest-asyncio>=1.4 ; extra == 'async'
   requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/81/6b/cfaf3d39f25132c156a068f6b805576c9103a84086019507c70e1911ee7d/black-26.5.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
   name: black

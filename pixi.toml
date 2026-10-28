@@ -60,6 +60,7 @@ punx = ">=0.3.5, <0.4"
 pytest-redis = ">=5.0.1, <6"
 bluesky = ">=1.15.1, <2"
 ophyd-async = ">=0.21.3, <0.22"
+pytest-postgresql = ">=9.1.1, <10"
 
 [feature.dev.tasks]
 test-all = [

@@ -16,13 +16,14 @@ async def process_data(…):
 """
 
 import io
-from asyncio import Queue, Task
+import time
 from collections.abc import AsyncGenerator
 from pathlib import PurePath
 from urllib.parse import urlencode
 
 import anyio
 import msgpack
+import numpy as np
 import pyarrow
 import pyarrow.feather
 import xarray as xr
@@ -79,23 +80,26 @@ async def node_websocket(run: Container) -> AsyncGenerator:
             break
 
 
-async def fetch_array(zarray, selection: slice | tuple[int]):
+async def fetch_array(client, selection: slice):
+    zarray = await zarr_array(client)
     name = zarray.name.strip("/")
     # Get the array from the API
     arr = await zarray.getitem(selection)
+    index = np.mgrid[selection]
     # Turn it into the standard xarray structure
-    dims = ("seq_num", *[f"{name}-dim{idx}" for idx in range(1, arr.ndim)])
+    dims = ("index", *[f"{name}-dim{idx}" for idx in range(1, arr.ndim)])
     xarr = xr.Dataset(
         data_vars={
             name: (dims, arr),
         },
-        coords={},
+        coords={"index": index},
         attrs={},
     )
     return xarr
 
 
 async def zarr_array(client):
+
     path = PurePath("/".join(client.path_parts))
     base_uri = client.uri.split("/api/")[0]
     zarr_uri = f"{base_uri}/zarr/v3/{path.parent}"
@@ -113,16 +117,15 @@ async def listen_to_array(
     tasks = []
     schema = None
     data_name = client.path_parts[-1]
-    zarr = await zarr_array(client)
     async for message in node_websocket(client):
         if message["type"] == "array-ref":
             start = message["patch"]["offset"][0]
             num = message["patch"]["shape"][0]
-            task = tg.create_task(fetch_array(zarr, slice(start, start + num)))
+            task = tg.create_task(fetch_array(client, slice(start, start + num)))
             await sender.send(task)
 
 
-async def existing_data(data):
+async def as_is(data):
     """A dummy coroutine that just returns existing data.
 
     This lets us create tasks that actually don't have to do any real
@@ -135,12 +138,16 @@ async def existing_data(data):
 async def listen_to_dataframe(
     client: DataFrameClient, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
 ) -> None:
+    starting_index = 0
     tasks = []
     async for message in node_websocket(client):
         if message["type"] == "table-data":
             data = pyarrow.feather.read_feather(io.BytesIO(message["payload"]))
             data = xr.Dataset.from_dataframe(data)
-            new_task = tg.create_task(existing_data(data))
+            data["index"] = [
+                starting_index + message["sequence"] - 1
+            ]  # 1-indexed to 0-indexed
+            new_task = tg.create_task(as_is(data))
             await sender.send(new_task)
         # elif message['type'] == 'table-schema':
         #     schema_encoded = message['arrow_schema']
@@ -151,18 +158,44 @@ async def listen_to_dataframe(
 async def listen_to_composite(
     client: CompositeClient, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
 ):
-    tasks = []
-    # We need to intercept the work_queue so we can merge composite datasets
     expected_keys = client.metadata["data_keys"].keys()
-    sub_queue: Queue[Task] = Queue()
-
-    async def link_queues(sender, sub_queue):
-        while True:
-            datum = await sub_queue.get()
-            await sender.send(datum)
-
-    tg.create_task(link_queues(sender, sub_queue)),
-    tg.create_task(listen_to_container(client, sender=sender, tg=tg)),
+    # We need to intercept the work_queue so we can merge composite datasets
+    sub_sender, sub_receiver = anyio.create_memory_object_stream(max_buffer_size=100)
+    tg.create_task(listen_to_container(client, sender=sub_sender, tg=tg))
+    dataset = xr.Dataset()
+    have_seen = {}
+    next_index = 1
+    async with sub_receiver:
+        async for task in sub_receiver:
+            new_data = await task
+            t0 = time.perf_counter()
+            # Combine the new data with the previous cached data
+            dataset = xr.combine_by_coords(
+                [dataset, new_data],
+                coords=["index"],
+                compat="no_conflicts",
+                join="outer",
+            )
+            awaiting_sigs = [
+                have_seen.setdefault(int(idx), set(expected_keys))
+                for idx in new_data["index"].data
+            ]
+            # Determine if we have any new complete arrays to produce
+            for sigs in awaiting_sigs:
+                sigs -= set(new_data.keys())
+            ready_indices = [
+                idx
+                for idx, awaiting_sigs in have_seen.items()
+                if len(awaiting_sigs) == 0
+            ]
+            merge_indices = []
+            while next_index in ready_indices:
+                merge_indices.append(next_index)
+                next_index += 1
+            if not merge_indices:
+                continue
+            merged_data = dataset.drop_sel(index=merge_indices)
+            await sender.send(tg.start_soon(as_is, merged_data))
 
 
 async def listen_to_container(

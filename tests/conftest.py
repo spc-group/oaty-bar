@@ -53,7 +53,8 @@ tiled_writable:
 
 
 @pytest.fixture(scope="session")
-def tiled_server(tmp_path_factory, session_mocker):
+def tiled_server(tmp_path_factory, session_mocker, postgresql_proc):
+    print(postgresql_proc)
     monkeypatch = MonkeyPatch()
     tmp_path = tmp_path_factory.mktemp("tiled")
     # Get a random open port
@@ -61,7 +62,8 @@ def tiled_server(tmp_path_factory, session_mocker):
         sock.bind(("", 0))
         port = sock.getsockname()[1]
     port = 8719
-    server_info = TiledServerInfo(tmp_path, port=str(port))
+    catalog_uri = f"sqlite:///{tmp_path / 'catalog.db'}"
+    server_info = TiledServerInfo(tmp_path, port=str(port), catalog_uri=catalog_uri)
     monkeypatch.setenv("TILED_CONFIG", str(tmp_path / "server_config.yml"))
     # Start the tiled server
     # Set up the profiles corresponding to the server

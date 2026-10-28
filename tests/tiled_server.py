@@ -24,10 +24,10 @@ trees:
   - path: /
     tree: catalog
     args:
-      uri: "sqlite:///{catalog_path}"
+      uri: "{catalog_uri}"
       writable_storage:
         - "{storage_path}"
-        - "sqlite:///{catalog_path}"
+        - "{catalog_uri}"
       # This creates the database if it does not exist. This is convenient, but in
       # a horizontally-scaled deployment, this can be a race condition and multiple
       # containers may simultaneously attempt to create the database.
@@ -45,6 +45,7 @@ trees:
 @dataclass()
 class TiledServerInfo:
     storage_path: Path
+    catalog_uri: str
     host: str = "127.0.0.1"
     port: str = "8719"
     Popen: subprocess.Popen | None = None
@@ -65,10 +66,9 @@ class TiledServerInfo:
         """
         if self.executor is not None:
             raise RuntimeError("Tiled is already running")
-        catalog_path = self.storage_path / "catalog.db"
         # Write the configuration file
         config_str = CONFIG.format(
-            catalog_path=catalog_path,
+            catalog_uri=self.catalog_uri,
             storage_path=self.storage_path,
             port=self.port,
             host=self.host,
