@@ -3,6 +3,7 @@ import socket
 import pytest
 from prefect.testing.utilities import prefect_test_harness
 from pytest import MonkeyPatch
+from pytest_postgresql.janitor import DatabaseJanitor
 from tiled.client import Context, from_context, from_uri
 from tiled.server.app import build_app_from_config
 
@@ -54,7 +55,7 @@ tiled_writable:
 
 @pytest.fixture(scope="session")
 def tiled_server(tmp_path_factory, session_mocker, postgresql_proc):
-    print(postgresql_proc)
+    db_proc = postgresql_proc
     monkeypatch = MonkeyPatch()
     tmp_path = tmp_path_factory.mktemp("tiled")
     # Get a random open port
@@ -62,7 +63,18 @@ def tiled_server(tmp_path_factory, session_mocker, postgresql_proc):
         sock.bind(("", 0))
         port = sock.getsockname()[1]
     port = 8719
-    catalog_uri = f"sqlite:///{tmp_path / 'catalog.db'}"
+    dbjanitor = DatabaseJanitor(
+        user=db_proc.user,
+        host=db_proc.host,
+        port=db_proc.port,
+        dbname=db_proc.dbname,
+        template_dbname=db_proc.template_dbname,
+        maintenance_dbname=db_proc.maintenance_dbname,
+        password=db_proc.password,
+        isolation_level=None,
+    )
+    catalog_uri = f"postgresql://{db_proc.user}:{db_proc.password}@{db_proc.host}:{db_proc.port}/{db_proc.dbname}"
+    # catalog_uri = f"sqlite:///{tmp_path / 'catalog.db'}"
     server_info = TiledServerInfo(tmp_path, port=str(port), catalog_uri=catalog_uri)
     monkeypatch.setenv("TILED_CONFIG", str(tmp_path / "server_config.yml"))
     # Start the tiled server
@@ -74,14 +86,15 @@ def tiled_server(tmp_path_factory, session_mocker, postgresql_proc):
         fp.write(
             TILED_PROFILES.format(uri=server_info.uri, api_key=server_info.api_key)
         )
-    try:
-        server_info.start()
-        # Execute tests
-        yield server_info
-    finally:
-        # Make sure the server gets cleaned up when we're done
-        monkeypatch.undo()
-        server_info.stop()
+    with dbjanitor:
+        try:
+            server_info.start()
+            # Execute tests
+            yield server_info
+        finally:
+            # Make sure the server gets cleaned up when we're done
+            monkeypatch.undo()
+            server_info.stop()
 
 
 @pytest.fixture()

@@ -122,10 +122,9 @@ async def listen_to_array(
     tasks = []
     schema = None
     data_name = client.path_parts[-1]
-    # Fetch any data that's already on disk
-    initial_fetch = tg.start_soon(fetch_array, client)
-
     async with node_websocket(client) as websocket:
+        # Fetch any data that's already on disk
+        initial_fetch = tg.start_soon(fetch_array, client)
         await sender.send(initial_fetch)
         # Start streaming new data
         async for message in node_messages(websocket):
@@ -156,9 +155,11 @@ async def listen_to_dataframe(
         data = xr.Dataset.from_dataframe(df)
         return data
 
-    initial_fetch = tg.start_soon(fetch_initial_data, client)
     async with node_websocket(client) as websocket:
+        # Fetch any array that was already written
+        initial_fetch = tg.start_soon(fetch_initial_data, client)
         await sender.send(initial_fetch)
+        # Wait for new data
         async for message in node_messages(websocket):
             if message["type"] == "table-data":
                 data = pyarrow.feather.read_feather(io.BytesIO(message["payload"]))
@@ -189,6 +190,10 @@ async def listen_to_composite(
             new_data = await task
             t0 = time.perf_counter()
             # Combine the new data with the previous cached data
+            print("^^^^^")
+            print(dataset)
+            print(new_data)
+            print("$$$$$")
             dataset = xr.combine_by_coords(
                 [dataset, new_data],
                 coords=["index"],
@@ -207,6 +212,7 @@ async def listen_to_composite(
                 for idx, awaiting_sigs in have_seen.items()
                 if len(awaiting_sigs) == 0
             ]
+            print(have_seen)
             merge_indices = []
             while next_index in ready_indices:
                 merge_indices.append(next_index)
