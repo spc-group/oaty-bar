@@ -3,6 +3,7 @@ import json
 from pathlib import Path, PurePath
 
 import h5py
+import numpy as np
 import pytest
 from bluesky_tiled_plugins import TiledWriter
 
@@ -82,6 +83,9 @@ async def test_reads_websockets_from_tiled(tiled_catalog, tiled_server):
     finally:
         # Make sure the task completed so we don't deadlock
         await write_task
-    assert 0 < len(xarrs) <= 9
+    assert len(xarrs) == 9
     xarr = xarrs[0]
     assert "bdet" in xarr.keys()
+    indices = [xarr.index.data for xarr in xarrs]
+    print(indices)
+    np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])

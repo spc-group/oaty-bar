@@ -34,7 +34,6 @@ from tiled.client.array import ArrayClient
 from tiled.client.composite import CompositeClient
 from tiled.client.container import Container
 from tiled.client.dataframe import DataFrameClient
-from websockets import ConnectionClosed
 from websockets.asyncio.client import connect
 
 # @dataclass()
@@ -61,7 +60,7 @@ from websockets.asyncio.client import connect
 #     to_fetch: Mapping[str:FetchItem] = field(default_factory=dict)
 
 
-async def node_websocket(run: Container) -> AsyncGenerator:
+def node_websocket(run: Container) -> AsyncGenerator:
     base_uri = run.uri.split("/api/")[0]
     run_path = "/".join(run.path_parts)
     ws_uri = f"{base_uri}/api/v1/stream/single/{run_path}"
@@ -69,23 +68,29 @@ async def node_websocket(run: Container) -> AsyncGenerator:
     ws_uri = f"{scheme.replace('http', 'ws')}://{rest}"
     params = {"envelope_format": "msgpack"}
     ws_uri = f"{ws_uri}?{urlencode(params)}"
-    async for websocket in connect(ws_uri):
-        try:
-            async for message in websocket:
-                unpacked = msgpack.unpackb(message)
-                yield unpacked
-        except ConnectionClosed:
-            continue
-        except GeneratorExit:
-            break
+    return connect(ws_uri)
 
 
-async def fetch_array(client, selection: slice):
+async def node_messages(websocket):
+    try:
+        async for message in websocket:
+            unpacked = msgpack.unpackb(message)
+            yield unpacked
+    except GeneratorExit:
+        pass
+
+
+async def fetch_array(client, selection: slice | None = None):
     zarray = await zarr_array(client)
     name = zarray.name.strip("/")
+    if selection is None:
+        selection = slice(zarray.shape[0])
     # Get the array from the API
     arr = await zarray.getitem(selection)
-    index = np.mgrid[selection]
+    if selection is None:
+        index = np.arange(arr.shape[0])
+    else:
+        index = np.mgrid[selection]
     # Turn it into the standard xarray structure
     dims = ("index", *[f"{name}-dim{idx}" for idx in range(1, arr.ndim)])
     xarr = xr.Dataset(
@@ -117,12 +122,18 @@ async def listen_to_array(
     tasks = []
     schema = None
     data_name = client.path_parts[-1]
-    async for message in node_websocket(client):
-        if message["type"] == "array-ref":
-            start = message["patch"]["offset"][0]
-            num = message["patch"]["shape"][0]
-            task = tg.create_task(fetch_array(client, slice(start, start + num)))
-            await sender.send(task)
+    # Fetch any data that's already on disk
+    initial_fetch = tg.start_soon(fetch_array, client)
+
+    async with node_websocket(client) as websocket:
+        await sender.send(initial_fetch)
+        # Start streaming new data
+        async for message in node_messages(websocket):
+            if message["type"] == "array-ref":
+                start = message["patch"]["offset"][0]
+                num = message["patch"]["shape"][0]
+                task = tg.create_task(fetch_array(client, slice(start, start + num)))
+                await sender.send(task)
 
 
 async def as_is(data):
@@ -139,16 +150,24 @@ async def listen_to_dataframe(
     client: DataFrameClient, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
 ) -> None:
     starting_index = 0
-    tasks = []
-    async for message in node_websocket(client):
-        if message["type"] == "table-data":
-            data = pyarrow.feather.read_feather(io.BytesIO(message["payload"]))
-            data = xr.Dataset.from_dataframe(data)
-            data["index"] = [
-                starting_index + message["sequence"] - 1
-            ]  # 1-indexed to 0-indexed
-            new_task = tg.create_task(as_is(data))
-            await sender.send(new_task)
+
+    async def fetch_initial_data(client):
+        df = await anyio.to_thread.run_sync(client.read)
+        data = xr.Dataset.from_dataframe(df)
+        return data
+
+    initial_fetch = tg.start_soon(fetch_initial_data, client)
+    async with node_websocket(client) as websocket:
+        await sender.send(initial_fetch)
+        async for message in node_messages(websocket):
+            if message["type"] == "table-data":
+                data = pyarrow.feather.read_feather(io.BytesIO(message["payload"]))
+                data = xr.Dataset.from_dataframe(data)
+                data["index"] = [
+                    starting_index + message["sequence"] - 1
+                ]  # 1-indexed to 0-indexed
+                new_task = tg.create_task(as_is(data))
+                await sender.send(new_task)
         # elif message['type'] == 'table-schema':
         #     schema_encoded = message['arrow_schema']
         #     b64_prefix = "data:application/vnd.apache.arrow.file;base64,"
@@ -164,7 +183,7 @@ async def listen_to_composite(
     tg.create_task(listen_to_container(client, sender=sub_sender, tg=tg))
     dataset = xr.Dataset()
     have_seen = {}
-    next_index = 1
+    next_index = 0
     async with sub_receiver:
         async for task in sub_receiver:
             new_data = await task
@@ -191,30 +210,34 @@ async def listen_to_composite(
             merge_indices = []
             while next_index in ready_indices:
                 merge_indices.append(next_index)
+                del have_seen[next_index]
                 next_index += 1
             if not merge_indices:
                 continue
-            merged_data = dataset.drop_sel(index=merge_indices)
+            print(merge_indices, dataset)
+            merged_data = dataset.sel(index=merge_indices)
+            dataset = dataset.drop_sel(index=merge_indices)
             await sender.send(tg.start_soon(as_is, merged_data))
 
 
 async def listen_to_container(
     client: Container, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
 ):
-    async for message in node_websocket(client):
-        if message["type"] == "container-child-created":
-            # New child, defer to a specific listener to handle updates
-            child = client.base[message["key"]]
-            listeners = [
-                listener
-                for Klass, listener in LISTENERS.items()
-                if isinstance(child, Klass)
-            ]
-            try:
-                listener = listeners[0]
-            except IndexError as exc:
-                raise KeyError(child.__class__.__mro__) from exc
-            tg.start_soon(listener, child, sender, tg)
+    async with node_websocket(client) as websocket:
+        async for message in node_messages(websocket):
+            if message["type"] == "container-child-created":
+                # New child, defer to a specific listener to handle updates
+                child = client.base[message["key"]]
+                listeners = [
+                    listener
+                    for Klass, listener in LISTENERS.items()
+                    if isinstance(child, Klass)
+                ]
+                try:
+                    listener = listeners[0]
+                except IndexError as exc:
+                    raise KeyError(child.__class__.__mro__) from exc
+                tg.start_soon(listener, child, sender, tg)
 
 
 LISTENERS = {
@@ -227,15 +250,16 @@ LISTENERS = {
 
 async def wait_for_run_close(run, sender: ObjectSendStream[TaskHandle]):
     """Check for a stop document, and close all the things."""
-    websocket_messages = node_websocket(run.parent)
-    async for message in websocket_messages:
-        if message["type"] != "container-child-metadata-updated":
-            continue
-        md = message["metadata"]
-        if "stop" in md.keys():
-            sender.close()
-            break
-    await websocket_messages.aclose()
+    async with node_websocket(run.parent) as websocket:
+        async for message in node_messages(websocket):
+            if message["type"] != "container-child-metadata-updated":
+                continue
+            md = message["metadata"]
+            if "stop" in md.keys():
+                # Let other tasks finish up, then shut it all down
+                await anyio.sleep(10)
+                sender.close()
+                break
 
 
 # async def fetch_items(
