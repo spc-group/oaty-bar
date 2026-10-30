@@ -17,7 +17,9 @@ async def process_data(…):
 
 import io
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from dataclasses import dataclass
+from functools import wraps
 from pathlib import PurePath
 from urllib.parse import urlencode
 
@@ -35,6 +37,72 @@ from tiled.client.composite import CompositeClient
 from tiled.client.container import Container
 from tiled.client.dataframe import DataFrameClient
 from websockets.asyncio.client import connect
+
+
+@dataclass()
+class DataPipe:
+    """A wrapper around an operation in a pipeline that makes it awaitable.
+
+    Instances of this class can be awaited to consume the asynchronous
+    iterator they wrap. Instances can also be iterated (e.g. ``async
+    for data in data_pipe: ...``), and will return the wrapper
+    iterator.
+
+    """
+
+    iterator: AsyncIterator
+    """The wrapped item that will be consumed if the pipe is awaited
+    or iterated."""
+
+    def __await__(self):
+        async def inner():
+            async for _ in self.iterator:
+                pass
+
+        yield from inner().__await__()
+
+    def __aiter__(self):
+        return self.iterator.__aiter__()
+
+    def __anext__(self):
+        return self.iterator.__anext__()
+
+    def __repr__(self):
+        class_name = self.__class__.__name__
+        generator_name = self.iterator.__name__
+        return f"<{class_name}: {generator_name}>"
+
+
+def datapipe(func):
+    """A decorator that turns a generator function into a data pipe.
+
+    ```python
+    @datapipe
+    async def my_pipe(data):
+        yield from data
+
+    input_data = ...
+    await my_pipe(input_data)  # <- causes pipe to run
+    ```
+
+    ...is equivalent to...
+
+    ```python
+    async def my_pipe(data):
+        yield from data
+
+    input_data = ...
+    input_data = my_pipe(input_data)
+    pipe = DataPipe(input_data)
+    await pipe
+    """
+
+    @wraps(func)
+    def inner(*args, **kwargs):
+        return DataPipe(func(*args, **kwargs))
+
+    return inner
+
 
 # @dataclass()
 # class FetchItem:
@@ -303,7 +371,21 @@ async def wait_for_run_close(run, sender: ObjectSendStream[TaskHandle]):
 #     data_queue.shutdown()
 
 
-async def bluesky_run_events(run: Container, max_tasks: int = 100):
+@datapipe
+async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncIterator:
+    """Generates xarrays with events added to a single Bluesky run.
+
+    The generator will yield xarrays of new data until the stop
+    document is written, then it will exit.
+
+    Parameters
+    ==========
+    run
+      The run to stream data from.
+    max_tasks
+      How many concurrent fetch tasks can be running at a time.
+
+    """
     # Queues hold fetch-tasks and another for the results of that work
     sender, receiver = anyio.create_memory_object_stream(max_buffer_size=max_tasks)
     async with create_task_group() as tg, receiver, sender:

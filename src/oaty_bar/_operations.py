@@ -5,7 +5,10 @@ import numpy as np
 import xarray as xr
 from tiled.client.container import Container
 
+from ._data_sources import datapipe
 
+
+@datapipe
 async def extract_rois(
     events: AsyncIterator[xr.Dataset],
     run: Container,
@@ -61,6 +64,7 @@ async def extract_rois(
         yield new_ds
 
 
+@datapipe
 async def apply_correction(
     events: AsyncIterator[xr.Dataset],
     run: Container,

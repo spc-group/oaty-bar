@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from bluesky_tiled_plugins import TiledWriter
 
-from oaty_bar._data_sources import bluesky_run_events
+from oaty_bar._data_sources import DataPipe, bluesky_run_events, datapipe
 
 data_dir = Path(__file__).parent / "data"
 
@@ -90,3 +90,73 @@ async def test_reads_websockets_from_tiled(tiled_catalog, tiled_server):
     indices = [xarr.index.data for xarr in xarrs]
     print(indices)
     np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+
+
+# Build a simple generator to use for this test
+async def generate_numbers(numbers: list[int] = None):
+    for num in range(10):
+        if numbers is not None:
+            numbers.append(num)
+        yield num
+
+
+@pytest.mark.asyncio
+async def test_pipe_wrapper_is_iterable():
+    # See if it's iterable
+    numbers = []
+    [_ async for _ in DataPipe(generate_numbers(numbers))]
+    assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+
+@pytest.mark.asyncio
+async def test_pipe_wrapper_is_iterator():
+    # See if it's iterable
+    numbers = []
+    iterator = DataPipe(generate_numbers(numbers))
+    while True:
+        try:
+            await anext(iterator)
+        except StopAsyncIteration:
+            break
+    assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+
+@pytest.mark.asyncio
+async def test_pipe_wrapper_is_awaitable():
+    # See if the pipe can be awaited to consume the contents
+    numbers = []
+    await DataPipe(generate_numbers(numbers))
+    assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+
+@pytest.mark.asyncio
+async def test_pipe_decorator_is_iterable():
+    numbers = []
+    [_ async for _ in datapipe(generate_numbers)(numbers)]
+    assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+
+@pytest.mark.asyncio
+async def test_pipe_decorator_is_iterator():
+    numbers = []
+    iterator = datapipe(generate_numbers)(numbers)
+    while True:
+        try:
+            await anext(iterator)
+        except StopAsyncIteration:
+            break
+    assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+
+@pytest.mark.asyncio
+async def test_pipe_decorator_is_awaitable():
+    # See if the pipe can be awaited to consume the contents
+    numbers = []
+    await datapipe(generate_numbers)(numbers)
+    assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+
+@pytest.mark.asyncio
+async def test_pipe_repr():
+    data = DataPipe(generate_numbers())
+    assert repr(data) == "<DataPipe: generate_numbers>"
