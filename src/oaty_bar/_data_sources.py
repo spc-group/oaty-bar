@@ -81,20 +81,20 @@ def datapipe(func):
     async def my_pipe(data):
         yield from data
 
-    input_data = ...
-    await my_pipe(input_data)  # <- causes pipe to run
+    input_data = data_source(…)
+    await my_pipe(input_data)  # ← causes pipe to run
     ```
 
-    ...is equivalent to...
+    …is equivalent to…
 
     ```python
     async def my_pipe(data):
         yield from data
 
-    input_data = ...
+    input_data = data_source(…)
     input_data = my_pipe(input_data)
     pipe = DataPipe(input_data)
-    await pipe
+    await pipe  # ← causes pipe to run
     """
 
     @wraps(func)
@@ -102,30 +102,6 @@ def datapipe(func):
         return DataPipe(func(*args, **kwargs))
 
     return inner
-
-
-# @dataclass()
-# class FetchItem:
-#     client: BaseClient
-#     path: PurePath
-#     which: slice | tuple[int]
-
-
-# @dataclass()
-# class WorkItem:
-#     """An item of work that should be done when possible.
-
-#     Parameters
-#     ==========
-#     data
-#       Known data that has already been fetched.
-#     to_fetch
-#       New data that should be retrieved.
-
-#     """
-
-#     data: xr.Dataset | None = None
-#     to_fetch: Mapping[str:FetchItem] = field(default_factory=dict)
 
 
 def node_websocket(run: Container) -> AsyncGenerator:
@@ -237,10 +213,6 @@ async def listen_to_dataframe(
                 ]  # 1-indexed to 0-indexed
                 new_task = tg.create_task(as_is(data))
                 await sender.send(new_task)
-        # elif message['type'] == 'table-schema':
-        #     schema_encoded = message['arrow_schema']
-        #     b64_prefix = "data:application/vnd.apache.arrow.file;base64,"
-        #     schema = pyarrow.ipc.read_schema(io.BytesIO(base64.b64decode(schema_encoded[len(b64_prefix):])))
 
 
 async def listen_to_composite(
@@ -336,41 +308,6 @@ async def wait_for_run_close(run, sender: ObjectSendStream[TaskHandle]):
                 break
 
 
-# async def fetch_items(
-#     uri: str, work_queue: Queue[Task], data_queue: Queue[xr.Dataset]
-# ) -> None:
-#     while True:
-#         try:
-#             work = await work_queue.get()
-#         except asyncio.QueueShutDown:
-#             break
-#         fetched_vars = {}
-#         fetched_coords = {}
-#         # Fetch the data
-#         # for name, item in work.to_fetch.items():
-#         #     zarray = await group.getitem(str(item.path))
-#         #     arr = await zarray.getitem(item.which)
-#         #     if name in ["seq_num", "time"]:
-#         #         fetched_coords[name] = arr
-#         #     else:
-#         #         dims = ("seq_num", *[f"{name}-dim{idx}" for idx in range(1, arr.ndim)])
-#         #         fetched_vars[name] = (dims, arr)
-#         # Build a new xarray that combines the old and new data
-#         # new_xarr = xr.Dataset(
-#         #     data_vars={
-#         #         **getattr(work.data, "data_vars", {}),
-#         #         **fetched_vars,
-#         #     },
-#         #     coords={
-#         #         **getattr(work.data, "coords", {}),
-#         #         **fetched_coords,
-#         #     },
-#         #     attrs=getattr(work.data, "attrs", {}),
-#         # )
-#         await data_queue.put(work)
-#     data_queue.shutdown()
-
-
 @datapipe
 async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncIterator:
     """Generates xarrays with events added to a single Bluesky run.
@@ -396,49 +333,3 @@ async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncItera
             data = await next_task
             yield data
         tg.cancel()
-
-
-# async def bluesky_stream_events_deprecated(
-#     stream: Container, signals: Sequence[str] | None = None
-# ) -> AsyncGenerator[xr.Dataset, Any]:
-#     if signals is None:
-#         signals = stream.keys()
-#     base_uri = stream.uri.split("/api/")[0]
-#     stream_path = "/".join(stream.path_parts)
-#     zarr_uri = f"{base_uri}/zarr/v3/{stream_path}"
-#     group = await zarraio.open_group(
-#         store=zarr_uri,
-#         mode="r",
-#     )
-#     # Sort out which arrays we want to fetch
-#     data_keys = stream.metadata["data_keys"]
-#     data_keys.setdefault("seq_num", "internal/seq_num")
-#     if signals is not None:
-#         data_keys = {
-#             sig: data_key for sig, data_key in data_keys.items() if sig in signals
-#         }
-#     paths = {
-#         sig: (f"internal/{sig}" if "external" not in data_key else sig)
-#         for sig, data_key in data_keys.items()
-#     }
-
-#     # Do the fetching
-#     async def data_arrays(signal, path):
-#         zarray = await group.getitem(path)
-#         arr = await zarray.getitem(slice(None))
-#         return (signal, arr)
-
-#     zarray_items = await asyncio.gather(
-#         *[data_arrays(sig, path) for sig, path in paths.items()]
-#     )
-#     zarrays = {sig: arr for sig, arr in zarray_items}
-#     if zarrays != {}:
-#         ds = xr.Dataset(
-#             data_vars={
-#                 sig: ("seq_num", arr)
-#                 for sig, arr in zarrays.items()
-#                 if sig != "seq_num"
-#             },
-#             coords={"seq_num": zarrays["seq_num"]} if "seq_num" in zarrays else {},
-#         )
-#         yield ds
