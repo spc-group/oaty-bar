@@ -77,7 +77,7 @@ lint-all = [
 ]
 check-types = "mypy"
 make-docs = "make html --directory=docs/"
-tests = "pytest"
+tests = "pytest --runslow"
 
 [feature.dev.tasks.lint]
 args = [

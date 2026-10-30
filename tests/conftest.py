@@ -11,6 +11,31 @@ from .tiled_server import TiledServerInfo
 from .tiled_trees import build_tree
 
 
+## Add an option for default skipping slow tests
+def pytest_addoption(parser):
+    parser.addoption(
+        "--runslow", action="store_true", default=False, help="run slow tests"
+    )
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "slow: mark test as slow to run")
+
+
+def modify_runslow(config, items):
+    if config.getoption("--runslow"):
+        # --runslow given in cli: do not skip slow tests
+        return
+    skip_slow = pytest.mark.skip(reason="need --runslow option to run")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip_slow)
+
+
+def pytest_collection_modifyitems(config, items):
+    modify_runslow(config, items)
+
+
+
 @pytest.fixture(scope="package")
 def xafs_run():
     with build_tree() as run:

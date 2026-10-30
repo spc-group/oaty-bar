@@ -67,6 +67,7 @@ async def write_docs(new_docs, writer):
         await asyncio.to_thread(writer, name, doc)
 
 
+@pytest.mark.slow
 @pytest.mark.timeout(60)
 @pytest.mark.asyncio
 async def test_reads_websockets_from_tiled(tiled_catalog, tiled_server):
@@ -92,7 +93,7 @@ async def test_reads_websockets_from_tiled(tiled_catalog, tiled_server):
     np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])
 
 
-# Build a simple generator to use for this test
+# Build a simple generator to use for the pipe tests
 async def generate_numbers(numbers: list[int] = None):
     for num in range(10):
         if numbers is not None:
