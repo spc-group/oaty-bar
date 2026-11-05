@@ -31,7 +31,7 @@ import pyarrow.feather
 import xarray as xr
 import zarr.api.asynchronous as zarraio
 from anyio import TaskHandle, create_task_group
-from anyio.abc import ObjectSendStream, TaskGroup
+from anyio.abc import ObjectSendStream
 from tiled.client.array import ArrayClient
 from tiled.client.composite import CompositeClient
 from tiled.client.container import Container
@@ -160,23 +160,21 @@ async def zarr_array(client):
     return arr
 
 
-async def listen_to_array(
-    client: ArrayClient, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
-) -> None:
+async def listen_to_array(client: ArrayClient, queue: FetchQueue) -> None:
     tasks = []
     schema = None
     data_name = client.path_parts[-1]
     async with node_websocket(client) as websocket:
         # Fetch any data that's already on disk
-        initial_fetch = tg.start_soon(fetch_array, client)
-        await sender.send(initial_fetch)
+        await queue.start_rest_task(fetch_array, client)
         # Start streaming new data
         async for message in node_messages(websocket):
             if message["type"] == "array-ref":
                 start = message["patch"]["offset"][0]
                 num = message["patch"]["shape"][0]
-                task = tg.create_task(fetch_array(client, slice(start, start + num)))
-                await sender.send(task)
+                await queue.start_live_task(
+                    fetch_array, client, slice(start, start + num)
+                )
 
 
 async def as_is(data):
@@ -189,9 +187,7 @@ async def as_is(data):
     return data
 
 
-async def listen_to_dataframe(
-    client: DataFrameClient, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
-) -> None:
+async def listen_to_dataframe(client: DataFrameClient, queue: FetchQueue) -> None:
     starting_index = 0
 
     async def fetch_initial_data(client):
@@ -201,8 +197,7 @@ async def listen_to_dataframe(
 
     async with node_websocket(client) as websocket:
         # Fetch any array that was already written
-        initial_fetch = tg.start_soon(fetch_initial_data, client)
-        await sender.send(initial_fetch)
+        await queue.start_rest_task(fetch_initial_data, client)
         # Wait for new data
         async for message in node_messages(websocket):
             if message["type"] == "table-data":
@@ -211,29 +206,22 @@ async def listen_to_dataframe(
                 data["index"] = [
                     starting_index + message["sequence"] - 1
                 ]  # 1-indexed to 0-indexed
-                new_task = tg.create_task(as_is(data))
-                await sender.send(new_task)
+                await queue.start_live_task(as_is, data)
 
 
-async def listen_to_composite(
-    client: CompositeClient, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
-):
+async def listen_to_composite(client: CompositeClient, queue: FetchQueue):
     expected_keys = client.metadata["data_keys"].keys()
     # We need to intercept the work_queue so we can merge composite datasets
-    sub_sender, sub_receiver = anyio.create_memory_object_stream(max_buffer_size=100)
-    tg.create_task(listen_to_container(client, sender=sub_sender, tg=tg))
+    sub_queue = FetchQueue(max_tasks=queue.max_tasks)
+    queue.start_soon(listen_to_container, client, sub_queue)
     dataset = xr.Dataset()
     have_seen = {}
     next_index = 0
-    async with sub_receiver:
-        async for task in sub_receiver:
+    async with sub_queue:
+        async for task in sub_queue:
             new_data = await task
             t0 = time.perf_counter()
             # Combine the new data with the previous cached data
-            print("^^^^^")
-            print(dataset)
-            print(new_data)
-            print("$$$$$")
             dataset = xr.combine_by_coords(
                 [dataset, new_data],
                 coords=["index"],
@@ -252,7 +240,6 @@ async def listen_to_composite(
                 for idx, awaiting_sigs in have_seen.items()
                 if len(awaiting_sigs) == 0
             ]
-            print(have_seen)
             merge_indices = []
             while next_index in ready_indices:
                 merge_indices.append(next_index)
@@ -260,20 +247,17 @@ async def listen_to_composite(
                 next_index += 1
             if not merge_indices:
                 continue
-            print(merge_indices, dataset)
             merged_data = dataset.sel(index=merge_indices)
             dataset = dataset.drop_sel(index=merge_indices)
-            await sender.send(tg.start_soon(as_is, merged_data))
+            await queue.start_live_task(as_is, merged_data)
 
 
-async def listen_to_container(
-    client: Container, sender: ObjectSendStream[TaskHandle], tg: TaskGroup
-):
-    async with node_websocket(client) as websocket:
+async def listen_to_container(container: Container, queue: FetchQueue):
+    async with node_websocket(container) as websocket:
         async for message in node_messages(websocket):
             if message["type"] == "container-child-created":
                 # New child, defer to a specific listener to handle updates
-                child = client.base[message["key"]]
+                child = container.base[message["key"]]
                 listeners = [
                     listener
                     for Klass, listener in LISTENERS.items()
@@ -283,7 +267,7 @@ async def listen_to_container(
                     listener = listeners[0]
                 except IndexError as exc:
                     raise KeyError(child.__class__.__mro__) from exc
-                tg.start_soon(listener, child, sender, tg)
+                queue.start_soon(listener, child, queue)
 
 
 LISTENERS = {
@@ -308,6 +292,53 @@ async def wait_for_run_close(run, sender: ObjectSendStream[TaskHandle]):
                 break
 
 
+@dataclass
+class FetchQueue:
+    max_tasks: int
+
+    async def __aenter__(self):
+        self._rest_sender, self._rest_receiver = anyio.create_memory_object_stream(
+            max_buffer_size=self.max_tasks
+        )
+        self._live_sender, self._live_receiver = anyio.create_memory_object_stream(
+            max_buffer_size=self.max_tasks
+        )
+        self.tg = create_task_group()
+        async with create_task_group() as tg:
+            tg.start_soon(self._rest_sender.__aenter__)
+            tg.start_soon(self._rest_receiver.__aenter__)
+            tg.start_soon(self._live_sender.__aenter__)
+            tg.start_soon(self._live_receiver.__aenter__)
+        await self.tg.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.tg.cancel()
+        await self.tg.__aexit__(exc_type, exc_val, exc_tb)
+        async with create_task_group() as tg:
+            tg.start_soon(self._live_receiver.__aexit__, exc_type, exc_val, exc_tb)
+            tg.start_soon(self._live_sender.__aexit__, exc_type, exc_val, exc_tb)
+            tg.start_soon(self._rest_receiver.__aexit__, exc_type, exc_val, exc_tb)
+            tg.start_soon(self._rest_sender.__aexit__, exc_type, exc_val, exc_tb)
+
+    async def __aiter__(self):
+        async for task in self._live_receiver:
+            yield task
+
+    async def start_live_task(self, func, *args, name=None):
+        task = self.start_soon(func, *args, name=None)
+        await self._live_sender.send(task)
+        return task
+
+    async def start_rest_task(self, func, *args, name=None):
+        task = self.start_soon(func, *args, name=None)
+        await self._live_sender.send(task)
+        return task
+
+    def start_soon(self, func, *args, name=None):
+        return self.tg.start_soon(func, *args, name=name)
+
+
 @datapipe
 async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncIterator:
     """Generates xarrays with events added to a single Bluesky run.
@@ -323,13 +354,14 @@ async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncItera
       How many concurrent fetch tasks can be running at a time.
 
     """
-    # Queues hold fetch-tasks and another for the results of that work
-    sender, receiver = anyio.create_memory_object_stream(max_buffer_size=max_tasks)
-    async with create_task_group() as tg, receiver, sender:
-        closing_task = tg.start_soon(wait_for_run_close, run, sender)
-        listener_task = tg.start_soon(listen_to_container, run, sender, tg)
+    # Queues hold fetch-tasks
+    # async with create_task_group() as tg, receiver, sender:
+    async with FetchQueue(max_tasks) as queue:
+        closing_task = queue.tg.start_soon(wait_for_run_close, run, queue._live_sender)
+        listener_task = queue.tg.start_soon(listen_to_container, run, queue)
         # Wait for new data to be available so we can generate it
-        async for next_task in receiver:
+        async for next_task in queue:
             data = await next_task
+            # To-do: make sure we avoid cancel scope stack corruption:
+            # https://anyio.readthedocs.io/en/stable/cancellation.html#avoiding-cancel-scope-stack-corruption
             yield data
-        tg.cancel()

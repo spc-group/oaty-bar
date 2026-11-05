@@ -38,18 +38,27 @@ def append_to_dataset(fd, path: PurePath, data):
     return ds
 
 
-async def write_docs(new_docs, writer):
+async def write_docs(new_docs, writer, tick=0.1):
     """A background task to write documents like it was a scan.
 
     Also copies data files in real-time to simulate data getting
     written.
 
+    Parameters
+    ==========
+    new_docs
+      The bluesky documents to write
+    writer
+      The TiledWriter to use when writing the documents.
+    tick
+      How long to wait between sending documents to simulate a real
+      acquisition.
+
     """
     resources = {}
-    TICK = 0.1
-    await asyncio.sleep(TICK * 10)
+    await asyncio.sleep(tick * 10)
     for name, doc in new_docs:
-        await asyncio.sleep(TICK)
+        await asyncio.sleep(tick)
         if name == "stream_resource":
             resources[doc["uid"]] = doc
         elif name == "stream_datum":
@@ -70,7 +79,7 @@ async def write_docs(new_docs, writer):
 @pytest.mark.slow
 @pytest.mark.timeout(60)
 @pytest.mark.asyncio
-async def test_reads_websockets_from_tiled(tiled_catalog, tiled_server):
+async def test_reads_from_tiled_websockets(tiled_catalog, tiled_server):
     catalog = tiled_catalog
     writer = TiledWriter(catalog, batch_size=1)
     docs = scan_docs(tiled_server.storage_path)
@@ -84,12 +93,29 @@ async def test_reads_websockets_from_tiled(tiled_catalog, tiled_server):
     finally:
         # Make sure the task completed so we don't deadlock
         await write_task
-    print(run["primary"].read())
     assert len(xarrs) == 9
     xarr = xarrs[0]
     assert "bdet" in xarr.keys()
     indices = [xarr.index.data for xarr in xarrs]
-    print(indices)
+    np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+
+
+@pytest.mark.slow
+@pytest.mark.timeout(60)
+@pytest.mark.asyncio
+async def test_reads_from_tiled_rest(tiled_catalog, tiled_server):
+    catalog = tiled_catalog
+    writer = TiledWriter(catalog, batch_size=1)
+    docs = scan_docs(tiled_server.storage_path)
+    await write_docs(docs, writer, tick=0)  # Write some data to read in
+    start_doc_uid = docs[0][1]["uid"]
+    run = catalog[start_doc_uid]
+    pipe = bluesky_run_events(run=run)
+    xarrs = [xarr async for xarr in pipe]
+    assert len(xarrs) == 9
+    xarr = xarrs[0]
+    assert "bdet" in xarr.keys()
+    indices = [xarr.index.data for xarr in xarrs]
     np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])
 
 
