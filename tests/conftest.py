@@ -17,6 +17,7 @@ def pytest_addoption(parser):
         "--runslow", action="store_true", default=False, help="run slow tests"
     )
 
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow to run")
 
@@ -33,7 +34,6 @@ def modify_runslow(config, items):
 
 def pytest_collection_modifyitems(config, items):
     modify_runslow(config, items)
-
 
 
 @pytest.fixture(scope="package")
