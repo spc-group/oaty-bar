@@ -22,6 +22,7 @@ from tiled import queries
 from tiled.client import from_profile
 from tiled.client.container import Container
 
+from ._data_management import load_client
 from ._export_hdf import build_file_name, serialize_hdf
 from ._export_tsv import serialize_tsv
 from .exceptions import NoRuns, TooManyRuns
@@ -85,7 +86,7 @@ class QuerySet:
         return runs
 
 
-def _export_run_coros(
+async def _export_run_coros(
     run: BlueskyRun,
     target_dir: str | Path = "",
     raw_profile: str = "oaty-bar",
@@ -142,10 +143,11 @@ def _export_run_coros(
                 f"No 'dm_exp' in metadata for run '{run_uid}', specify a *target_dir*."
             )
             return []
-        beamline_id = run.metadata["start"]["beamline_id"]
-        exp_name = run.metadata["start"]["dm_exp"]
-        target_dir_ = Path("/net/s25data/export") / beamline_id / exp_name
-        target_dir_.mkdir(exist_ok=True, parents=False)
+        beamline_id = start_doc["beamline_id"]
+        exp_name = start_doc["dm_exp"]
+        dm_client = await load_client(beamline_id.replace("-", ""), asyncio=True)
+        experiment = await dm_client.experiment(name=exp_name)
+        target_dir_ = Path(experiment.data_path)
     else:
         target_dir_ = Path(target_dir)
     hdf_file = target_dir_ / build_file_name(run.metadata, extension=".hdf")
@@ -334,7 +336,7 @@ async def export_runs(
     # Start the exporters in parallel
     tasks = []
     for run in islice(runs.values(), max_runs):
-        coros = _export_run_coros(
+        coros = await _export_run_coros(
             run=run,
             target_dir=str(target_dir) if target_dir is not None else "",
             raw_profile=raw_profile,
