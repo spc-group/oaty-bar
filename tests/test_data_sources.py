@@ -1,7 +1,7 @@
-import asyncio
 import json
 from pathlib import Path, PurePath
 
+import anyio
 import h5py
 import numpy as np
 import pytest
@@ -56,9 +56,9 @@ async def write_docs(new_docs, writer, tick=0.1):
 
     """
     resources = {}
-    await asyncio.sleep(tick * 10)
+    await anyio.sleep(tick * 10)
     for name, doc in new_docs:
-        await asyncio.sleep(tick)
+        await anyio.sleep(tick)
         if name == "stream_resource":
             resources[doc["uid"]] = doc
         elif name == "stream_datum":
@@ -73,26 +73,28 @@ async def write_docs(new_docs, writer, tick=0.1):
             with h5py.File(fp, mode="a") as fd:
                 # Write to temporary HDF5 file
                 append_to_dataset(fd, entry, frame)
-        await asyncio.to_thread(writer, name, doc)
+        await anyio.to_thread.run_sync(writer, name, doc)
 
 
 @pytest.mark.slow
 @pytest.mark.timeout(60)
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_reads_from_tiled_websockets(tiled_catalog, tiled_server):
     catalog = tiled_catalog
+    print(catalog)
     writer = TiledWriter(catalog, batch_size=1)
     docs = scan_docs(tiled_server.storage_path)
     await write_docs(docs[:1], writer)  # write 'start' doc to make the run
     start_doc_uid = docs[0][1]["uid"]
     run = catalog[start_doc_uid]
     pipe = bluesky_run_events(run=run)
-    write_task = asyncio.create_task(write_docs(docs[1:], writer))
-    try:
-        xarrs = [xarr async for xarr in pipe]
-    finally:
-        # Make sure the task completed so we don't deadlock
-        await write_task
+    async with anyio.create_task_group() as tg:
+        write_task = tg.create_task(write_docs(docs[1:], writer))
+        try:
+            xarrs = [xarr async for xarr in pipe]
+        finally:
+            # Make sure the task completed so we don't deadlock
+            await write_task
     assert len(xarrs) == 9
     xarr = xarrs[0]
     assert "bdet" in xarr.keys()
@@ -102,9 +104,10 @@ async def test_reads_from_tiled_websockets(tiled_catalog, tiled_server):
 
 @pytest.mark.slow
 @pytest.mark.timeout(60)
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_reads_from_tiled_rest(tiled_catalog, tiled_server):
     catalog = tiled_catalog
+    print(catalog)
     writer = TiledWriter(catalog, batch_size=1)
     docs = scan_docs(tiled_server.storage_path)
     await write_docs(docs, writer, tick=0)  # Write some data to read in

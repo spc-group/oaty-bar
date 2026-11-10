@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from functools import wraps
 from pathlib import PurePath
 from urllib.parse import urlencode
-import asyncio
 
 import anyio
 import msgpack
@@ -31,8 +30,8 @@ import pyarrow
 import pyarrow.feather
 import xarray as xr
 import zarr.api.asynchronous as zarraio
-from anyio import TaskHandle, create_task_group, ClosedResourceError, fail_after, EndOfStream
-from anyio.abc import ObjectSendStream
+from anyio import ClosedResourceError, EndOfStream, fail_after
+from anyio.abc import TaskGroup
 from tiled.client.array import ArrayClient
 from tiled.client.composite import CompositeClient
 from tiled.client.container import Container
@@ -173,9 +172,7 @@ async def listen_to_array(client: ArrayClient, queue: FetchQueue) -> None:
                 start = message["patch"]["offset"][0]
                 num = message["patch"]["shape"][0]
                 print(message)
-                await queue.start_soon(
-                    fetch_array, client, slice(start, start + num)
-                )
+                await queue.start_soon(fetch_array, client, slice(start, start + num))
 
 
 async def as_is(data):
@@ -261,8 +258,8 @@ async def listen_to_container(container: Container, queue: FetchQueue):
     def start_child_listener(child):
         listeners = [
             listener
-                for Klass, listener in LISTENERS.items()
-                if isinstance(child, Klass)
+            for Klass, listener in LISTENERS.items()
+            if isinstance(child, Klass)
         ]
         try:
             listener = listeners[0]
@@ -306,6 +303,7 @@ async def wait_for_run_close(run, queue: FetchQueue):
                 queue.close_soon()
                 break
 
+
 class FetchQueue:
     """A two-part queue for passing asynchronous tasks.
 
@@ -320,14 +318,15 @@ class FetchQueue:
     then the *live* tasks.
 
     """
+
     max_tasks: int
     _will_close_soon: bool = False
     task_group: TaskGroup
-    
+
     def __init__(self, max_tasks: int, task_group: TaskGroup = None):
         self.max_tasks = max_tasks
         self._task_group = task_group
-    
+
     async def __aenter__(self):
         # Create the ends of the queue
         self.sender, self.receiver = anyio.create_memory_object_stream(
@@ -337,7 +336,7 @@ class FetchQueue:
         await self.receiver.__aenter__()
         # Create a task group to use for managing submitted tasks
         if self._task_group is None:
-            self.task_group = create_task_group()
+            self.task_group = anyio.create_task_group()
             await self.task_group.__aenter__()
         else:
             self.task_group = self._task_group
@@ -355,7 +354,7 @@ class FetchQueue:
             try:
                 with fail_after(1) as scope:
                     task = await self.receiver.receive()
-            except (ClosedResourceError, EndOfStream):
+            except ClosedResourceError, EndOfStream:
                 print("BREAKING")
                 # The queue was closed, guess we're done
                 break
@@ -363,13 +362,17 @@ class FetchQueue:
                 qstats = self.receiver.statistics()
                 print(self._will_close_soon, self)
                 # print(qstats)
-                if self._will_close_soon and qstats.current_buffer_used == 0 and qstats.tasks_waiting_receive == 0:
+                if (
+                    self._will_close_soon
+                    and qstats.current_buffer_used == 0
+                    and qstats.tasks_waiting_receive == 0
+                ):
                     # We're most likely done, so clean up
                     self.sender.close()
                     break
                 continue
             yield task
-        print("CLOSED", self)            
+        print("CLOSED", self)
 
     def close_soon(self):
         print("CLOSING", self)
@@ -398,9 +401,12 @@ async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncItera
     """
     # Outer stream avoids cancel-scope stack corruption:
     # https://anyio.readthedocs.io/en/stable/cancellation.html#avoiding-cancel-scope-stac
-    send_stream, receive_stream = anyio.create_memory_object_stream(max_buffer_size=max_tasks)
+    send_stream, receive_stream = anyio.create_memory_object_stream(
+        max_buffer_size=max_tasks
+    )
     async with receive_stream:
         async with anyio.create_task_group() as tg:
+
             async def _produce():
                 async with send_stream, FetchQueue(max_tasks, task_group=tg) as queue:
                     closing_task = tg.start_soon(wait_for_run_close, run, queue)
@@ -408,6 +414,7 @@ async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncItera
                     async for next_task in queue:
                         data = await next_task
                         await send_stream.send(data)
+
             tg.start_soon(_produce)
             async for data in receive_stream:
                 yield data

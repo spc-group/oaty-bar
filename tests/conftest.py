@@ -1,6 +1,7 @@
 import socket
 
 import pytest
+import stamina
 from prefect.testing.utilities import prefect_test_harness
 from pytest import MonkeyPatch
 from pytest_postgresql.janitor import DatabaseJanitor
@@ -135,3 +136,8 @@ def tiled_catalog(tiled_server):
             catalog[key].delete(recursive=True, external_only=False)
         catalog.context.close()
         del catalog
+
+
+@pytest.fixture(autouse=True, scope="session")
+def deactivate_retries():
+    stamina.set_active(False)
