@@ -144,7 +144,7 @@ async def _export_run_coros(
             )
             return []
         beamline_id = start_doc["beamline_id"]
-        exp_name = start_doc["dm_exp"]
+        exp_name = start_doc["dm_exp"].strip()
         dm_client = await load_client(beamline_id.replace("-", ""), asyncio=True)
         experiment = await dm_client.experiment(name=exp_name)
         target_dir_ = Path(experiment.data_path)

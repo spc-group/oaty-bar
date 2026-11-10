@@ -112,10 +112,11 @@ async def test_reads_from_tiled_rest(tiled_catalog, tiled_server):
     run = catalog[start_doc_uid]
     pipe = bluesky_run_events(run=run)
     xarrs = [xarr async for xarr in pipe]
-    assert len(xarrs) == 9
+    assert len(xarrs) == 1
     xarr = xarrs[0]
     assert "bdet" in xarr.keys()
-    indices = [xarr.index.data for xarr in xarrs]
+    indices = xarr.index.data
+    print(indices)
     np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])
 
 

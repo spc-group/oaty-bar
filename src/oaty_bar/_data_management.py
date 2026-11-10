@@ -64,3 +64,18 @@ async def load_client(station_name: str, asyncio=True) -> dmax.Client:
         data_archive_uri=creds.data_archive_uri,
     )
     return client
+
+
+def load_client_sync(station_name: str, asyncio=True) -> dmax.Client:
+    creds = DataManagementStation.load(station_name.lower())
+    Client = dmax.Client
+    client = Client(
+        username=creds.username,
+        password=creds.password.get_secret_value(),
+        station_name=creds.station_name,
+        scheduling_uri=creds.scheduling_uri,
+        data_storage_uri=creds.data_storage_uri,
+        processing_uri=creds.processing_uri,
+        data_archive_uri=creds.data_archive_uri,
+    )
+    return client

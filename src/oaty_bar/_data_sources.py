@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from functools import wraps
 from pathlib import PurePath
 from urllib.parse import urlencode
+import asyncio
 
 import anyio
 import msgpack
@@ -30,7 +31,7 @@ import pyarrow
 import pyarrow.feather
 import xarray as xr
 import zarr.api.asynchronous as zarraio
-from anyio import TaskHandle, create_task_group
+from anyio import TaskHandle, create_task_group, ClosedResourceError, fail_after, EndOfStream
 from anyio.abc import ObjectSendStream
 from tiled.client.array import ArrayClient
 from tiled.client.composite import CompositeClient
@@ -142,7 +143,6 @@ async def fetch_array(client, selection: slice | None = None):
             name: (dims, arr),
         },
         coords={"index": index},
-        attrs={},
     )
     return xarr
 
@@ -166,13 +166,14 @@ async def listen_to_array(client: ArrayClient, queue: FetchQueue) -> None:
     data_name = client.path_parts[-1]
     async with node_websocket(client) as websocket:
         # Fetch any data that's already on disk
-        await queue.start_rest_task(fetch_array, client)
+        await queue.start_soon(fetch_array, client, None)
         # Start streaming new data
         async for message in node_messages(websocket):
             if message["type"] == "array-ref":
                 start = message["patch"]["offset"][0]
                 num = message["patch"]["shape"][0]
-                await queue.start_live_task(
+                print(message)
+                await queue.start_soon(
                     fetch_array, client, slice(start, start + num)
                 )
 
@@ -197,7 +198,7 @@ async def listen_to_dataframe(client: DataFrameClient, queue: FetchQueue) -> Non
 
     async with node_websocket(client) as websocket:
         # Fetch any array that was already written
-        await queue.start_rest_task(fetch_initial_data, client)
+        await queue.start_soon(fetch_initial_data, client)
         # Wait for new data
         async for message in node_messages(websocket):
             if message["type"] == "table-data":
@@ -206,14 +207,14 @@ async def listen_to_dataframe(client: DataFrameClient, queue: FetchQueue) -> Non
                 data["index"] = [
                     starting_index + message["sequence"] - 1
                 ]  # 1-indexed to 0-indexed
-                await queue.start_live_task(as_is, data)
+                await queue.start_soon(as_is, data)
 
 
 async def listen_to_composite(client: CompositeClient, queue: FetchQueue):
     expected_keys = client.metadata["data_keys"].keys()
     # We need to intercept the work_queue so we can merge composite datasets
-    sub_queue = FetchQueue(max_tasks=queue.max_tasks)
-    queue.start_soon(listen_to_container, client, sub_queue)
+    sub_queue = FetchQueue(max_tasks=queue.max_tasks, task_group=queue.task_group)
+    queue.task_group.start_soon(listen_to_container, client, sub_queue)
     dataset = xr.Dataset()
     have_seen = {}
     next_index = 0
@@ -222,6 +223,10 @@ async def listen_to_composite(client: CompositeClient, queue: FetchQueue):
             new_data = await task
             t0 = time.perf_counter()
             # Combine the new data with the previous cached data
+            print("^^^")
+            print(dataset)
+            print(new_data)
+            print("$$$")
             dataset = xr.combine_by_coords(
                 [dataset, new_data],
                 coords=["index"],
@@ -249,25 +254,30 @@ async def listen_to_composite(client: CompositeClient, queue: FetchQueue):
                 continue
             merged_data = dataset.sel(index=merge_indices)
             dataset = dataset.drop_sel(index=merge_indices)
-            await queue.start_live_task(as_is, merged_data)
+            await queue.start_soon(as_is, merged_data)
 
 
 async def listen_to_container(container: Container, queue: FetchQueue):
+    def start_child_listener(child):
+        listeners = [
+            listener
+                for Klass, listener in LISTENERS.items()
+                if isinstance(child, Klass)
+        ]
+        try:
+            listener = listeners[0]
+        except IndexError as exc:
+            raise KeyError(child.__class__.__mro__) from exc
+        queue.task_group.start_soon(listener, child, queue)
+
     async with node_websocket(container) as websocket:
+        for child in container.base.values():
+            start_child_listener(child)
         async for message in node_messages(websocket):
             if message["type"] == "container-child-created":
                 # New child, defer to a specific listener to handle updates
                 child = container.base[message["key"]]
-                listeners = [
-                    listener
-                    for Klass, listener in LISTENERS.items()
-                    if isinstance(child, Klass)
-                ]
-                try:
-                    listener = listeners[0]
-                except IndexError as exc:
-                    raise KeyError(child.__class__.__mro__) from exc
-                queue.start_soon(listener, child, queue)
+                start_child_listener(child)
 
 
 LISTENERS = {
@@ -278,65 +288,97 @@ LISTENERS = {
 }
 
 
-async def wait_for_run_close(run, sender: ObjectSendStream[TaskHandle]):
-    """Check for a stop document, and close all the things."""
+async def wait_for_run_close(run, queue: FetchQueue):
+    """Check for a stop document, and then stop live streaming."""
+    if "stop" in run.metadata.keys():
+        # The live_sender won't get any data
+        queue.close_soon()
+        return
     async with node_websocket(run.parent) as websocket:
         async for message in node_messages(websocket):
             if message["type"] != "container-child-metadata-updated":
                 continue
             md = message["metadata"]
             if "stop" in md.keys():
+                print("STOPPING")
                 # Let other tasks finish up, then shut it all down
-                await anyio.sleep(10)
-                sender.close()
+                await anyio.sleep(4)
+                queue.close_soon()
                 break
 
-
-@dataclass
 class FetchQueue:
-    max_tasks: int
+    """A two-part queue for passing asynchronous tasks.
 
+    The **rest queue** is expected to be closed by listeners when they
+    have submitted all the tasks for data that are currently at-rest.
+
+    The **live queue** should be closed once there is no longer an
+    expectation that any more data will be written (e.g. after a
+    Bluesky run writes a "stop" document).
+
+    Iterating over this queue will produce first the *rest* tasks,
+    then the *live* tasks.
+
+    """
+    max_tasks: int
+    _will_close_soon: bool = False
+    task_group: TaskGroup
+    
+    def __init__(self, max_tasks: int, task_group: TaskGroup = None):
+        self.max_tasks = max_tasks
+        self._task_group = task_group
+    
     async def __aenter__(self):
-        self._rest_sender, self._rest_receiver = anyio.create_memory_object_stream(
+        # Create the ends of the queue
+        self.sender, self.receiver = anyio.create_memory_object_stream(
             max_buffer_size=self.max_tasks
         )
-        self._live_sender, self._live_receiver = anyio.create_memory_object_stream(
-            max_buffer_size=self.max_tasks
-        )
-        self.tg = create_task_group()
-        async with create_task_group() as tg:
-            tg.start_soon(self._rest_sender.__aenter__)
-            tg.start_soon(self._rest_receiver.__aenter__)
-            tg.start_soon(self._live_sender.__aenter__)
-            tg.start_soon(self._live_receiver.__aenter__)
-        await self.tg.__aenter__()
+        await self.sender.__aenter__()
+        await self.receiver.__aenter__()
+        # Create a task group to use for managing submitted tasks
+        if self._task_group is None:
+            self.task_group = create_task_group()
+            await self.task_group.__aenter__()
+        else:
+            self.task_group = self._task_group
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.tg.cancel()
-        await self.tg.__aexit__(exc_type, exc_val, exc_tb)
-        async with create_task_group() as tg:
-            tg.start_soon(self._live_receiver.__aexit__, exc_type, exc_val, exc_tb)
-            tg.start_soon(self._live_sender.__aexit__, exc_type, exc_val, exc_tb)
-            tg.start_soon(self._rest_receiver.__aexit__, exc_type, exc_val, exc_tb)
-            tg.start_soon(self._rest_sender.__aexit__, exc_type, exc_val, exc_tb)
+        if self._task_group is None:
+            self.task_group.cancel()
+            await self.task_group.__aexit__(exc_type, exc_val, exc_tb)
+        await self.sender.__aexit__(exc_type, exc_val, exc_tb)
+        await self.receiver.__aexit__(exc_type, exc_val, exc_tb)
 
     async def __aiter__(self):
-        async for task in self._live_receiver:
+        while True:
+            try:
+                with fail_after(1) as scope:
+                    task = await self.receiver.receive()
+            except (ClosedResourceError, EndOfStream):
+                print("BREAKING")
+                # The queue was closed, guess we're done
+                break
+            except TimeoutError:
+                qstats = self.receiver.statistics()
+                print(self._will_close_soon, self)
+                # print(qstats)
+                if self._will_close_soon and qstats.current_buffer_used == 0 and qstats.tasks_waiting_receive == 0:
+                    # We're most likely done, so clean up
+                    self.sender.close()
+                    break
+                continue
             yield task
+        print("CLOSED", self)            
 
-    async def start_live_task(self, func, *args, name=None):
-        task = self.start_soon(func, *args, name=None)
-        await self._live_sender.send(task)
+    def close_soon(self):
+        print("CLOSING", self)
+        self._will_close_soon = True
+
+    async def start_soon(self, func, *args, name=None):
+        task = self.task_group.start_soon(func, *args, name=None)
+        await self.sender.send(task)
         return task
-
-    async def start_rest_task(self, func, *args, name=None):
-        task = self.start_soon(func, *args, name=None)
-        await self._live_sender.send(task)
-        return task
-
-    def start_soon(self, func, *args, name=None):
-        return self.tg.start_soon(func, *args, name=name)
 
 
 @datapipe
@@ -354,14 +396,19 @@ async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncItera
       How many concurrent fetch tasks can be running at a time.
 
     """
-    # Queues hold fetch-tasks
-    # async with create_task_group() as tg, receiver, sender:
-    async with FetchQueue(max_tasks) as queue:
-        closing_task = queue.tg.start_soon(wait_for_run_close, run, queue._live_sender)
-        listener_task = queue.tg.start_soon(listen_to_container, run, queue)
-        # Wait for new data to be available so we can generate it
-        async for next_task in queue:
-            data = await next_task
-            # To-do: make sure we avoid cancel scope stack corruption:
-            # https://anyio.readthedocs.io/en/stable/cancellation.html#avoiding-cancel-scope-stack-corruption
-            yield data
+    # Outer stream avoids cancel-scope stack corruption:
+    # https://anyio.readthedocs.io/en/stable/cancellation.html#avoiding-cancel-scope-stac
+    send_stream, receive_stream = anyio.create_memory_object_stream(max_buffer_size=max_tasks)
+    async with receive_stream:
+        async with anyio.create_task_group() as tg:
+            async def _produce():
+                async with send_stream, FetchQueue(max_tasks, task_group=tg) as queue:
+                    closing_task = tg.start_soon(wait_for_run_close, run, queue)
+                    listener_task = tg.start_soon(listen_to_container, run, queue)
+                    async for next_task in queue:
+                        data = await next_task
+                        await send_stream.send(data)
+            tg.start_soon(_produce)
+            async for data in receive_stream:
+                yield data
+            tg.cancel()
