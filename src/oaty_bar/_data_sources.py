@@ -130,6 +130,7 @@ async def fetch_array(client, selection: slice | None = None):
     if selection is None:
         selection = slice(zarray.shape[0])
     # Get the array from the API
+    print(client.path_parts[-1], selection)
     arr = await zarray.getitem(selection)
     if selection is None:
         index = np.arange(arr.shape[0])
@@ -147,7 +148,6 @@ async def fetch_array(client, selection: slice | None = None):
 
 
 async def zarr_array(client):
-
     path = PurePath("/".join(client.path_parts))
     base_uri = client.uri.split("/api/")[0]
     zarr_uri = f"{base_uri}/zarr/v3/{path.parent}"
@@ -159,19 +159,27 @@ async def zarr_array(client):
     return arr
 
 
-async def listen_to_array(client: ArrayClient, queue: FetchQueue) -> None:
+async def listen_to_array(
+    client: ArrayClient, queue: FetchQueue, max_batch_size: int
+) -> None:
     tasks = []
     schema = None
     data_name = client.path_parts[-1]
     async with node_websocket(client) as websocket:
-        # Fetch any data that's already on disk
-        await queue.start_soon(fetch_array, client, None)
+        # Fetch any data that's already on disk in batches
+        zarray = await zarr_array(client)
+        for start in range(0, zarray.shape[0], max_batch_size or zarray.shape[0]):
+            if max_batch_size:
+                stop = min(start + max_batch_size, zarray.shape[0])
+            else:
+                stop = zarray.shape[0]
+            print(start, stop)
+            await queue.start_soon(fetch_array, client, slice(start, stop))
         # Start streaming new data
         async for message in node_messages(websocket):
             if message["type"] == "array-ref":
                 start = message["patch"]["offset"][0]
                 num = message["patch"]["shape"][0]
-                print(message)
                 await queue.start_soon(fetch_array, client, slice(start, start + num))
 
 
@@ -185,7 +193,9 @@ async def as_is(data):
     return data
 
 
-async def listen_to_dataframe(client: DataFrameClient, queue: FetchQueue) -> None:
+async def listen_to_dataframe(
+    client: DataFrameClient, queue: FetchQueue, max_batch_size: int
+) -> None:
     starting_index = 0
 
     async def fetch_initial_data(client):
@@ -207,29 +217,33 @@ async def listen_to_dataframe(client: DataFrameClient, queue: FetchQueue) -> Non
                 await queue.start_soon(as_is, data)
 
 
-async def listen_to_composite(client: CompositeClient, queue: FetchQueue):
+async def listen_to_composite(
+    client: CompositeClient, queue: FetchQueue, max_batch_size: int
+):
     expected_keys = client.metadata["data_keys"].keys()
     # We need to intercept the work_queue so we can merge composite datasets
     sub_queue = FetchQueue(max_tasks=queue.max_tasks, task_group=queue.task_group)
-    queue.task_group.start_soon(listen_to_container, client, sub_queue)
+    queue.task_group.start_soon(listen_to_container, client, sub_queue, max_batch_size)
     dataset = xr.Dataset()
     have_seen = {}
     next_index = 0
     async with sub_queue:
         async for task in sub_queue:
+            print("++++++++")
             new_data = await task
-            t0 = time.perf_counter()
             # Combine the new data with the previous cached data
-            print("^^^")
-            print(dataset)
-            print(new_data)
-            print("$$$")
             dataset = xr.combine_by_coords(
                 [dataset, new_data],
                 coords=["index"],
                 compat="no_conflicts",
                 join="outer",
             )
+            if "bdet" in new_data:
+                print(new_data)
+                print("--------")
+            if "bdet" in dataset:                
+                print(np.any(np.isnan(dataset['bdet'].data)), np.all(np.isnan(dataset['bdet'].data)))
+            
             awaiting_sigs = [
                 have_seen.setdefault(int(idx), set(expected_keys))
                 for idx in new_data["index"].data
@@ -254,7 +268,9 @@ async def listen_to_composite(client: CompositeClient, queue: FetchQueue):
             await queue.start_soon(as_is, merged_data)
 
 
-async def listen_to_container(container: Container, queue: FetchQueue):
+async def listen_to_container(
+    container: Container, queue: FetchQueue, max_batch_size: int
+):
     def start_child_listener(child):
         listeners = [
             listener
@@ -265,7 +281,7 @@ async def listen_to_container(container: Container, queue: FetchQueue):
             listener = listeners[0]
         except IndexError as exc:
             raise KeyError(child.__class__.__mro__) from exc
-        queue.task_group.start_soon(listener, child, queue)
+        queue.task_group.start_soon(listener, child, queue, max_batch_size)
 
     async with node_websocket(container) as websocket:
         for child in container.base.values():
@@ -288,7 +304,9 @@ LISTENERS = {
 async def wait_for_run_close(run, queue: FetchQueue):
     """Check for a stop document, and then stop live streaming."""
     if "stop" in run.metadata.keys():
-        # The live_sender won't get any data
+        # The live_sender won't get any data, so just give listeners a
+        # chance listeners to populate the queue
+        await anyio.sleep(4)
         queue.close_soon()
         return
     async with node_websocket(run.parent) as websocket:
@@ -297,7 +315,6 @@ async def wait_for_run_close(run, queue: FetchQueue):
                 continue
             md = message["metadata"]
             if "stop" in md.keys():
-                print("STOPPING")
                 # Let other tasks finish up, then shut it all down
                 await anyio.sleep(4)
                 queue.close_soon()
@@ -355,13 +372,10 @@ class FetchQueue:
                 with fail_after(1) as scope:
                     task = await self.receiver.receive()
             except ClosedResourceError, EndOfStream:
-                print("BREAKING")
                 # The queue was closed, guess we're done
                 break
             except TimeoutError:
                 qstats = self.receiver.statistics()
-                print(self._will_close_soon, self)
-                # print(qstats)
                 if (
                     self._will_close_soon
                     and qstats.current_buffer_used == 0
@@ -372,10 +386,8 @@ class FetchQueue:
                     break
                 continue
             yield task
-        print("CLOSED", self)
 
     def close_soon(self):
-        print("CLOSING", self)
         self._will_close_soon = True
 
     async def start_soon(self, func, *args, name=None):
@@ -385,7 +397,9 @@ class FetchQueue:
 
 
 @datapipe
-async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncIterator:
+async def bluesky_run_events(
+    run: Container, max_tasks: int = 100, max_batch_size: int = 0
+) -> AsyncIterator:
     """Generates xarrays with events added to a single Bluesky run.
 
     The generator will yield xarrays of new data until the stop
@@ -397,6 +411,10 @@ async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncItera
       The run to stream data from.
     max_tasks
       How many concurrent fetch tasks can be running at a time.
+    max_batch_size
+      The arrays generated will have at most this many rows. Arrays
+      smaller than this size may be emitted whenever they are ready,
+      such as when live-streaming over websockets.
 
     """
     # Outer stream avoids cancel-scope stack corruption:
@@ -410,7 +428,9 @@ async def bluesky_run_events(run: Container, max_tasks: int = 100) -> AsyncItera
             async def _produce():
                 async with send_stream, FetchQueue(max_tasks, task_group=tg) as queue:
                     closing_task = tg.start_soon(wait_for_run_close, run, queue)
-                    listener_task = tg.start_soon(listen_to_container, run, queue)
+                    listener_task = tg.start_soon(
+                        listen_to_container, run, queue, max_batch_size
+                    )
                     async for next_task in queue:
                         data = await next_task
                         await send_stream.send(data)

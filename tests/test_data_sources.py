@@ -107,8 +107,7 @@ async def test_reads_from_tiled_websockets(tiled_catalog, tiled_server):
 @pytest.mark.anyio
 async def test_reads_from_tiled_rest(tiled_catalog, tiled_server):
     catalog = tiled_catalog
-    print(catalog)
-    writer = TiledWriter(catalog, batch_size=1)
+    writer = TiledWriter(catalog)
     docs = scan_docs(tiled_server.storage_path)
     await write_docs(docs, writer, tick=0)  # Write some data to read in
     start_doc_uid = docs[0][1]["uid"]
@@ -119,7 +118,25 @@ async def test_reads_from_tiled_rest(tiled_catalog, tiled_server):
     xarr = xarrs[0]
     assert "bdet" in xarr.keys()
     indices = xarr.index.data
-    print(indices)
+    np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+
+
+@pytest.mark.slow
+@pytest.mark.timeout(60)
+@pytest.mark.anyio
+async def test_reads_in_batches(tiled_catalog, tiled_server):
+    catalog = tiled_catalog
+    writer = TiledWriter(catalog, batch_size=1)
+    docs = scan_docs(tiled_server.storage_path)
+    await write_docs(docs, writer, tick=0)  # Write some data to read in
+    start_doc_uid = docs[0][1]["uid"]
+    run = catalog[start_doc_uid]
+    pipe = bluesky_run_events(run=run, max_batch_size=2)
+    xarrs = [xarr async for xarr in pipe]
+    assert len(xarrs) == 5
+    xarr = xarrs[0]
+    assert "bdet" in xarr.keys()
+    indices = np.concatenate([xarr.index.data for xarr in xarrs])
     np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])
 
 
