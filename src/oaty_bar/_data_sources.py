@@ -16,7 +16,6 @@ async def process_data(…):
 """
 
 import io
-import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass
 from functools import wraps
@@ -130,7 +129,6 @@ async def fetch_array(client, selection: slice | None = None):
     if selection is None:
         selection = slice(zarray.shape[0])
     # Get the array from the API
-    print(client.path_parts[-1], selection)
     arr = await zarray.getitem(selection)
     if selection is None:
         index = np.arange(arr.shape[0])
@@ -173,7 +171,6 @@ async def listen_to_array(
                 stop = min(start + max_batch_size, zarray.shape[0])
             else:
                 stop = zarray.shape[0]
-            print(start, stop)
             await queue.start_soon(fetch_array, client, slice(start, stop))
         # Start streaming new data
         async for message in node_messages(websocket):
@@ -229,7 +226,6 @@ async def listen_to_composite(
     next_index = 0
     async with sub_queue:
         async for task in sub_queue:
-            print("++++++++")
             new_data = await task
             # Combine the new data with the previous cached data
             dataset = xr.combine_by_coords(
@@ -238,12 +234,6 @@ async def listen_to_composite(
                 compat="no_conflicts",
                 join="outer",
             )
-            if "bdet" in new_data:
-                print(new_data)
-                print("--------")
-            if "bdet" in dataset:                
-                print(np.any(np.isnan(dataset['bdet'].data)), np.all(np.isnan(dataset['bdet'].data)))
-            
             awaiting_sigs = [
                 have_seen.setdefault(int(idx), set(expected_keys))
                 for idx in new_data["index"].data
@@ -265,7 +255,13 @@ async def listen_to_composite(
                 continue
             merged_data = dataset.sel(index=merge_indices)
             dataset = dataset.drop_sel(index=merge_indices)
-            await queue.start_soon(as_is, merged_data)
+            # Split them up into batches to honor *max_batch_size*
+            imin = int(merged_data.index.min().data)
+            imax = int(merged_data.index.max().data)
+            step = max_batch_size or imax + 1
+            for start in range(imin, imax + 1, step):
+                subarray = merged_data.sel(index=slice(start, start + step))
+                await queue.start_soon(as_is, subarray)
 
 
 async def listen_to_container(

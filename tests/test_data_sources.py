@@ -81,7 +81,6 @@ async def write_docs(new_docs, writer, tick=0.1):
 @pytest.mark.anyio
 async def test_reads_from_tiled_websockets(tiled_catalog, tiled_server):
     catalog = tiled_catalog
-    print(catalog)
     writer = TiledWriter(catalog, batch_size=1)
     docs = scan_docs(tiled_server.storage_path)
     await write_docs(docs[:1], writer)  # write 'start' doc to make the run
