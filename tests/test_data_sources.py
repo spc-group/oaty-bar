@@ -73,7 +73,7 @@ async def write_docs(new_docs, writer, tick=0.1):
             with h5py.File(fp, mode="a") as fd:
                 # Write to temporary HDF5 file
                 append_to_dataset(fd, entry, frame)
-        await anyio.to_thread.run_sync(writer, name, doc)
+        await anyio.to_thread.run_sync(writer, name, doc, abandon_on_cancel=True)
 
 
 @pytest.mark.slow
@@ -147,7 +147,7 @@ async def generate_numbers(numbers: list[int] = None):
         yield num
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_pipe_wrapper_is_iterable():
     # See if it's iterable
     numbers = []
@@ -155,7 +155,7 @@ async def test_pipe_wrapper_is_iterable():
     assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_pipe_wrapper_is_iterator():
     # See if it's iterable
     numbers = []
@@ -168,7 +168,7 @@ async def test_pipe_wrapper_is_iterator():
     assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_pipe_wrapper_is_awaitable():
     # See if the pipe can be awaited to consume the contents
     numbers = []
@@ -176,14 +176,14 @@ async def test_pipe_wrapper_is_awaitable():
     assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_pipe_decorator_is_iterable():
     numbers = []
     [_ async for _ in datapipe(generate_numbers)(numbers)]
     assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_pipe_decorator_is_iterator():
     numbers = []
     iterator = datapipe(generate_numbers)(numbers)
@@ -195,7 +195,7 @@ async def test_pipe_decorator_is_iterator():
     assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_pipe_decorator_is_awaitable():
     # See if the pipe can be awaited to consume the contents
     numbers = []
@@ -203,7 +203,7 @@ async def test_pipe_decorator_is_awaitable():
     assert numbers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_pipe_repr():
     data = DataPipe(generate_numbers())
     assert repr(data) == "<DataPipe: generate_numbers>"

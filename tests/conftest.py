@@ -79,7 +79,7 @@ tiled_writable:
 """
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def tiled_server(tmp_path_factory, session_mocker, postgresql_proc):
     db_proc = postgresql_proc
     monkeypatch = MonkeyPatch()

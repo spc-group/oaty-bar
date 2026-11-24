@@ -149,9 +149,17 @@ async def zarr_array(client):
     path = PurePath("/".join(client.path_parts))
     base_uri = client.uri.split("/api/")[0]
     zarr_uri = f"{base_uri}/zarr/v3/{path.parent}"
+    # Skip instance caching to prevent fsspec from caching a reference
+    # to aiohttp sessions. Caching can cause "Event loop closed"
+    # errors if a new event loop is create (e.g. during tests). The
+    # trade-off is that calls to `zarr_array()` will be slower,
+    # probably? An alternative would be to explicitly reset the cache
+    # between event loops with
+    # `fsspec.implementations.http.HTTPFileSystem.clear_instance_cache()`.
     zgroup = await zarraio.open_group(
         store=zarr_uri,
         mode="r",
+        storage_options=dict(skip_instance_cache=True),
     )
     arr = await zgroup.getitem(client.path_parts[-1])
     return arr
