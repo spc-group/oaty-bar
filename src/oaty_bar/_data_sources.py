@@ -141,6 +141,7 @@ async def fetch_array(client, selection: slice | None = None):
             name: (dims, arr),
         },
         coords={"index": index},
+        attrs={"source": client},
     )
     return xarr
 
@@ -205,8 +206,9 @@ async def listen_to_dataframe(
 
     async def fetch_initial_data(client):
         df = await anyio.to_thread.run_sync(client.read)
-        data = xr.Dataset.from_dataframe(df)
-        return data
+        dataset = xr.Dataset.from_dataframe(df)
+        dataset.attrs['source'] = client
+        return dataset
 
     async with node_websocket(client) as websocket:
         # Fetch any array that was already written
@@ -219,6 +221,7 @@ async def listen_to_dataframe(
                 data["index"] = [
                     starting_index + message["sequence"] - 1
                 ]  # 1-indexed to 0-indexed
+                dataset.attrs['source'] = client
                 await queue.start_soon(as_is, data)
 
 
@@ -232,9 +235,11 @@ async def listen_to_composite(
     dataset = xr.Dataset()
     have_seen = {}
     next_index = 0
+    
     async with sub_queue:
         async for task in sub_queue:
             new_data = await task
+            new_data.attrs['source'] = client
             # Combine the new data with the previous cached data
             dataset = xr.combine_by_coords(
                 [dataset, new_data],
