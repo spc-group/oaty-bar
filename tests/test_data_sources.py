@@ -99,7 +99,7 @@ async def test_reads_from_tiled_websockets(tiled_catalog, tiled_server):
     assert "bdet" in xarr.keys()
     indices = [xarr.index.data for xarr in xarrs]
     np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])
-    assert xarr.attrs['source'].uri == run['primary'].uri
+    assert xarr.attrs["source"].uri == run["primary"].uri
 
 
 @pytest.mark.slow
@@ -119,7 +119,7 @@ async def test_reads_from_tiled_rest(tiled_catalog, tiled_server):
     assert "bdet" in xarr.keys()
     indices = xarr.index.data
     np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])
-    assert xarr.attrs['source'].uri == run['primary'].uri
+    assert xarr.attrs["source"].uri == run["primary"].uri
 
 
 @pytest.mark.slow
@@ -139,7 +139,7 @@ async def test_reads_in_batches(tiled_catalog, tiled_server):
     assert "bdet" in xarr.keys()
     indices = np.concatenate([xarr.index.data for xarr in xarrs])
     np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5, 6, 7, 8])
-    assert xarr.attrs['source'].uri == run['primary'].uri
+    assert xarr.attrs["source"].uri == run["primary"].uri
 
 
 # Build a simple generator to use for the pipe tests

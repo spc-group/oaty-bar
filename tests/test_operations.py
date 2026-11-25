@@ -2,7 +2,11 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from oaty_bar._operations import apply_correction, extract_rois
+from oaty_bar._operations import (
+    apply_correction,
+    extract_fluorescence_rois,
+    extract_rois,
+)
 
 
 @pytest.mark.asyncio
@@ -20,12 +24,55 @@ async def test_extract_rois():
         yield event_dataset
 
     roi_slices = {"Ni_Ka": [[0, 2]], "full": [slice(None)]}
-    rois = extract_rois(events=events(), run=None, source="vortex_me4", rois=roi_slices)
+    rois = extract_rois(events=events(), source="vortex_me4", rois=roi_slices)
     rois = [roi async for roi in rois]
     assert len(rois) > 0
     roi_row = rois[0]
     assert roi_row["vortex_me4-full-sum"].data[0] == 4 * 256
     assert roi_row["vortex_me4-Ni_Ka-sum"].data[0] == 2 * 256
+
+
+@pytest.mark.asyncio
+async def test_extract_fluorescence_rois():
+    # Create fake bluesky objects
+    class Run:
+        metadata = {
+            "start": {
+                "chemical_formula": "Ni(OH)2",
+            },
+        }
+
+    class Stream:
+        metadata = {
+            "configuration": {
+                "vortex_me4": {"data": {"vortex_me4-ev_per_bin": 160}},
+            },
+        }
+        parent = Run()
+
+    event_dataset = xr.Dataset(
+        data_vars={
+            "vortex_me4": (
+                ["seq_num", "dim1", "dim2", "dim3"],
+                np.ones((3, 1, 4, 256)),
+            ),
+        },
+        coords={
+            "seq_num": [1, 2, 3],
+        },
+        attrs={"source": Stream()},
+    )
+
+    async def events():
+        yield event_dataset
+
+    roi_slices = {"Ni_Ka": [[0, 2]], "full": [slice(None)]}
+    rois = extract_fluorescence_rois(events=events())
+    rois = [roi async for roi in rois]
+    assert len(rois) > 0
+    roi_row = rois[0]
+    assert roi_row["vortex_me4-Ni_KL3_guess-sum"].data[0] == 4
+    assert roi_row["vortex_me4-full-sum"].data[0] == 4 * 256
 
 
 @pytest.mark.asyncio

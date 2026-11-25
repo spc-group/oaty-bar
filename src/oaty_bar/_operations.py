@@ -1,8 +1,11 @@
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping, Sequence
+from itertools import product
 from typing import Any
 
 import numpy as np
 import xarray as xr
+import xraydb
+from chemformula import ChemFormula
 from tiled.client.container import Container
 
 from ._data_sources import datapipe
@@ -11,7 +14,6 @@ from ._data_sources import datapipe
 @datapipe
 async def extract_rois(
     events: AsyncIterator[xr.Dataset],
-    run: Container,
     source: str,
     rois: Mapping[str, Sequence[list[int] | slice]],
 ) -> AsyncGenerator[xr.Dataset, Any]:
@@ -42,8 +44,6 @@ async def extract_rois(
     events:
       Async-iterable of datasets containing data from events (e.g. the
       scanning axis in a Bluesky scan).
-    run:
-      The Tiled run container for this scan.
     source:
       The name of the data variable in events from which to calculate
       the ROIs.
@@ -61,6 +61,85 @@ async def extract_rois(
             result = np.sum(sub_arr, axis=axis)
             roi_key = f"{source}-{roi_name}-sum"
             new_ds[roi_key] = ("seq_num", result.data)
+        yield new_ds
+
+
+@datapipe
+async def extract_fluorescence_rois(
+    events: AsyncIterator[xr.Dataset],
+    minimum_intensity: float = 0.1,
+) -> AsyncGenerator[xr.Dataset, Any]:
+    """Calculate stats for regions-of-interest from fluorescence arrays.
+
+    The operation requires that each array in *events* has a "source"
+    attribute that corresponds to a
+    `bluesky_tiled_plugins.BlueskyEventStream` tiled client.
+
+    Fluorescence arrays are determined based on metadata in the
+    *source* client. For each *signal* listed in
+    `source.metadata['configuration']`, if the configuration has
+    "<signal_name>-ev_per_bin" set, then the signal is interpreted as
+    a fluorescence array.
+
+    ROIs are derived from the "chemical_formula" metadat key in the
+    parent start document:
+    `source.parent.metadata['start']['chemical_formula']`. If not
+    found, then only basic stats for the whole array will be
+    calculated.
+
+    Parameters
+    ==========
+    events:
+      Async-iterable of datasets containing data from events (e.g. the
+      scanning axis in a Bluesky scan).
+    minimum_intensity
+      X-ray emission lines below this relative intensity will not be
+      measured.
+
+    """
+    result = None
+    async for ds in events:
+        stream = ds.attrs["source"]
+        new_ds = ds.copy()
+        # Decide which ROIs to use
+        formula = stream.parent.metadata["start"]["chemical_formula"]
+        elements = ChemFormula(formula).element.keys()
+        lines = {elem: xraydb.xray_lines(elem) for elem in elements}
+        min_intensity = 0.1
+        lines = {
+            f"{elem}_{line.initial_level}{line.final_level}": line.energy
+            for elem, lines in lines.items()
+            for line in lines.values()
+            if line.intensity > minimum_intensity
+        }
+        # Decide which signals are fluorescence data
+        xrf_configs = {
+            sig: cfg["data"]
+            for sig, cfg in stream.metadata["configuration"].items()
+            if f"{sig}-ev_per_bin" in cfg["data"].keys()
+        }
+        # Apply the ROIs
+        for (sig, cfg), (line, line_energy) in product(
+            xrf_configs.items(), lines.items()
+        ):
+            ev_per_bin = cfg[f"{sig}-ev_per_bin"]
+            nbins = ds[sig].shape[-1]
+            energies = np.linspace(
+                ev_per_bin / 2, ev_per_bin * (nbins - 0.5), num=nbins
+            )
+            min_energy = ev_per_bin * nbins * 0.05
+            if line_energy < min_energy:
+                # Ignore peaks in the bottom 5% of the spectrum
+                continue
+            roi = np.logical_and(
+                line_energy - 100 < energies, energies < line_energy + 100
+            )
+            roi_sum = np.sum(ds[sig][:, :, :, roi], axis=(1, 2, 3))
+            new_ds[f"{sig}-{line}_guess-sum"] = roi_sum
+        # Apply overall stats
+        for sig, cfg in xrf_configs.items():
+            full_sum = np.sum(ds[sig], axis=(1, 2, 3))
+            new_ds[f"{sig}-full-sum"] = full_sum
         yield new_ds
 
 
